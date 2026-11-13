@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, it } from 'node:test';
 import { parseFeaturesMarkdown, readFeatureFile, topoOrder, validateFeatureSpec, validatePlan } from './lib.mjs';
 
 const read = (p) => readFileSync(new URL(`../../plan/${p}`, import.meta.url), 'utf8');
 const example = () => JSON.parse(read('plan.example.json'));
-const features = () => readFeatureFile(new URL('../../plan/features.example.md', import.meta.url).pathname).model;
+const features = () => readFeatureFile(fileURLToPath(new URL('../../plan/features.example.md', import.meta.url))).model;
 const contextExists = () => true;
 
 describe('feature files', () => {

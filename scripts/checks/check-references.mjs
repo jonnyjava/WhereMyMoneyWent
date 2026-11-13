@@ -2,6 +2,10 @@
 // doc or source file actually exists. Moving or renaming a file otherwise
 // breaks references silently: linters check syntax, not whether a path exists.
 //
+// Only the project's own folders and root files are scanned. Stray folders that tools or other environments leave
+// in the project (a local package store, coverage reports, an assistant's notes) are not ours to check, and a package
+// store alone holds thousands of READMEs that mention paths like docs/ and src/.
+//
 // Skipped on purpose:
 //   - tokens with placeholders (<name>, $VAR, {x}), which are templates
 //   - lines containing "refs:ignore" (used for paths a test creates on the fly)
@@ -11,8 +15,9 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 const SKIP_DIRS = new Set(['node_modules', '.next', '.git', 'test-results', 'playwright-report', '.vercel']);
-const SKIP_FILES = new Set(['pnpm-lock.yaml', 'protected-paths.txt', 'CODEOWNERS', '.dependency-cruiser.cjs']);
+const SKIP_FILES = new Set(['pnpm-lock.yaml', 'protected-paths.txt', 'human-approval-paths.txt', 'CODEOWNERS', '.dependency-cruiser.cjs']);
 const SCANNED = /\.(md|sh|mjs|cjs|ts|tsx|yml|yaml|json)$/;
+const SCAN_DIRS = ['.github', 'harness', 'scripts', 'docs', 'src', 'e2e', 'drizzle', 'plan'];
 // A refuse-to-pass-vacuously guard: finding almost nothing means the scan is broken.
 const MIN_REFERENCES = 20;
 // Files that a person creates in a project built from this starter, so the starter itself cannot contain them.
@@ -38,6 +43,15 @@ function walk(dir, out = []) {
       out.push(path.replace(/^\.\//, ''));
     }
   }
+  return out;
+}
+
+function listFiles() {
+  const out = [];
+  for (const name of readdirSync('.')) {
+    if (statSync(name).isFile() && SCANNED.test(name) && !SKIP_FILES.has(name)) out.push(name);
+  }
+  for (const dir of SCAN_DIRS) if (existsSync(dir)) walk(dir, out);
   return out;
 }
 
@@ -77,7 +91,7 @@ function exists(token) {
 
 const problems = [];
 let checked = 0;
-const files = walk('.');
+const files = listFiles();
 
 for (const file of files) {
   const lines = readFileSync(file, 'utf8').split('\n');
@@ -104,6 +118,14 @@ if (checked < MIN_REFERENCES) {
 if (problems.length > 0) {
   console.error('Broken path references (a file was moved or renamed without updating them):');
   for (const p of problems) console.error('  - ' + p);
+  const dotted = problems.filter((p) => /: "\./.test(p)).length;
+  if (dotted > 0) {
+    console.error(
+      `\n${dotted} of these paths start with a dot (.github/, .nvmrc, ...). That usually means the project was copied without its ` +
+        'hidden files: "cp -r dir/*", some file pickers and some upload tools skip them. Run "pnpm check:files", and copy with ' +
+        '"cp -a", "rsync -a" or by unzipping the archive.',
+    );
+  }
   process.exit(1);
 }
 console.log(`references ok (${checked} paths in ${files.length} files)`);

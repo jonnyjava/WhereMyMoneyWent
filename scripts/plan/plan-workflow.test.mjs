@@ -36,7 +36,8 @@ beforeEach(() => {
   writeFileSync(join(dir, 'harness/bin/run-agent.sh'), STUB);
   chmodSync(join(dir, 'harness/bin/run-agent.sh'), 0o755);
   mkdirSync(join(dir, 'docs'));
-  for (const f of ['contexts.md', 'domain-language.md']) cpSync(join(repo, 'docs', f), join(dir, 'docs', f));
+  writeFileSync(join(dir, 'docs/contexts.md'), '# Bounded contexts\n\nNone yet.\n');
+  writeFileSync(join(dir, 'docs/domain-language.md'), '# Domain language\n\nNone yet.\n');
   mkdirSync(join(dir, 'plan'));
   cpSync(join(repo, 'plan/features.example.md'), join(dir, 'plan/features.example.md'));
   for (const c of ['catalog', 'reference-lending']) {

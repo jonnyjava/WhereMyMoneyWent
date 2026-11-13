@@ -43,22 +43,24 @@ ok()  { printf 'PASS  %s\n' "$1"; PASS=$((PASS + 1)); }
 bad() { printf 'FAIL  %s  (%s)\n' "$1" "$2"; FAILN=$((FAILN + 1)); }
 
 env_base() {
+  cp "$ROOT/harness/human-approval-paths.txt" base/harness/human-approval-paths.txt # a scenario may break its copy
   export HEAD_REF=agent/issue-7 DRAFT=false SAME_REPO=true KILL=true LABELS=ready \
          PR=1 GH_REPO=x/y GH_TOKEN=t GH_FAIL=0
   export FILES='src/contexts/a/domain/x.aggregate.ts' # refs:ignore (a fixture, not a real file)
   cp base/package.json head/package.json
 }
 
-guard() { # name, expected run, expected reason fragment ("" = any)
+guard() { # name, expected run, expected reason fragment ("" = any), expected needs_approval (default false)
   : > "$T/out"
   GITHUB_OUTPUT="$T/out" bash --noprofile --norc -eo pipefail "$T/guard.sh" >/dev/null 2>&1
-  local code=$? run reason
+  local code=$? run reason approval
   run="$(grep '^run=' "$T/out" | cut -d= -f2)"
   reason="$(grep '^reason=' "$T/out" | cut -d= -f2-)"
-  if [ "$code" -eq 0 ] && [ "$run" = "$2" ] && { [ -z "$3" ] || printf '%s' "$reason" | grep -q "$3"; }; then
+  approval="$(grep '^needs_approval=' "$T/out" | cut -d= -f2)"
+  if [ "$code" -eq 0 ] && [ "$run" = "$2" ] && { [ -z "$3" ] || printf '%s' "$reason" | grep -q "$3"; } && [ "$approval" = "${4:-false}" ]; then
     ok "$1"
   else
-    bad "$1" "exit=$code run=$run reason=$reason"
+    bad "$1" "exit=$code run=$run reason=$reason needs_approval=$approval"
   fi
 }
 
@@ -72,7 +74,7 @@ decide() { # name, expected state
 
 dec_env() {
   export R_GUARD=success IS_AGENT=true RUN=true REASON='' \
-         R_STYLE=success R_ARCH=success R_QA=success R_E2E=success
+         R_STYLE=success R_ARCH=success R_QA=success R_E2E=success NEEDS_APPROVAL=false
 }
 
 echo "== guard =="
@@ -92,6 +94,12 @@ env_base; echo '{"scripts":{"verify:fast":"tsc"},"dependencies":{"a":"1"}}' > he
                                               guard "weakened package.json script is blocked"     false "package.json scripts"
 env_base; echo '{"scripts":{"verify:fast":"tsc && eslint ."},"dependencies":{"a":"1","b":"2"}}' > head/package.json
                                               guard "adding a dependency is allowed"              true ""
+env_base; FILES="src/a.ts"$'\n'"pnpm-lock.yaml";  guard "lockfile change runs the gates but needs a person" true "" true  # refs:ignore
+env_base; FILES="src/a.ts"$'\n'"AGENTS.md"$'\n'"pnpm-lock.yaml"; guard "protected path wins over a lockfile change" false "protected paths" true  # refs:ignore
+env_base; FILES="pnpm-lock.yaml"; rm base/harness/human-approval-paths.txt
+                                              guard "missing approval list fails closed to needs approval" true "" true  # refs:ignore
+env_base; FILES="src/a.ts"; : > base/harness/human-approval-paths.txt  # refs:ignore
+                                              guard "empty approval list fails closed to needs approval" true "" true
 
 echo
 echo "== guard fails CLOSED when gh errors =="
@@ -117,6 +125,10 @@ dec_env; RUN=false REASON=draft;                      decide "draft agent PR"   
 dec_env; RUN=false REASON="kill switch is on";        decide "kill switch"                               blocked
 dec_env; RUN=false REASON="touches protected paths";  decide "protected path"                            blocked
 dec_env; RUN=false REASON="labeled needs-human";      decide "needs-human label"                         blocked
+dec_env; NEEDS_APPROVAL=true;                         decide "all gates succeeded, lockfile changed"     approval
+dec_env; NEEDS_APPROVAL='';                           decide "all gates succeeded, approval flag missing (fails closed)" approval
+dec_env; NEEDS_APPROVAL=true R_QA=failure R_E2E=skipped; decide "lockfile changed and QA failed"        red
+dec_env; NEEDS_APPROVAL=true RUN=false REASON="touches protected paths"; decide "lockfile changed and a protected path was touched" blocked
 
 echo
 echo "Result: $PASS passed, $FAILN failed"

@@ -14,6 +14,9 @@ pnpm prove:guardrails           # proves every guardrail actually bites
 ```
 
 - Start with `docs/guides/bootstrap.md` (build order) and `harness/SETUP.md` (GitHub and Vercel setup).
+- Copy the starter with the zip, `cp -a` or `rsync -a`. A copy made with `cp -r starter/*`, or with some file pickers and
+  upload tools, silently drops every file whose name starts with a dot (`.github/`, `.dependency-cruiser.cjs`, `.nvmrc`, ...).
+  `pnpm check:files` lists anything that is missing, and `pnpm verify:fast` runs it first.
 - Rules for agents: `AGENTS.md`, then `docs/conventions/`.
 - Worked examples of every convention: `docs/guides/reference-slice.md`.
 - The agent pipeline: `harness/pipeline.md` and `.github/workflows/`.

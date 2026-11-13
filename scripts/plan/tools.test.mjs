@@ -1,7 +1,7 @@
 // The smaller tools: extract-plan, parse-features, check-plan and new-context.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, it } from 'node:test';
@@ -22,6 +22,9 @@ function run(script, args, options = {}) {
   }
 }
 const planText = readFileSync(join(repo, 'plan/plan.example.json'), 'utf8');
+// Fixture documents: the tests must not depend on what the live project has written in docs/ since the starter was made.
+const CONTEXTS_MD = '# Bounded contexts\n\n| Context | Purpose | Owns | Talks to |\n|---|---|---|---|\n| _none yet_ | | | |\n';
+const LANGUAGE_MD = '# Domain language\n\n## Reference contexts (pattern examples only)\nExamples.\n\n## Proposed terms\nNone.\n';
 
 describe('extract-plan', () => {
   it('finds the plan in an answer that has prose around it, preferring the last valid block', () => {
@@ -86,7 +89,8 @@ describe('parse-features and check-plan', () => {
 describe('new-context', () => {
   const docs = () => {
     mkdirSync(join(dir, 'docs'));
-    for (const f of ['contexts.md', 'domain-language.md']) copyFileSync(join(repo, 'docs', f), join(dir, 'docs', f));
+    writeFileSync(join(dir, 'docs/contexts.md'), CONTEXTS_MD);
+    writeFileSync(join(dir, 'docs/domain-language.md'), LANGUAGE_MD);
   };
 
   it('creates the layer folders and a public index, and registers the context in the docs', () => {

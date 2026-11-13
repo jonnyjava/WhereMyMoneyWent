@@ -43,15 +43,20 @@ branches to `main`. Secrets live ONLY here, so PR workflows cannot read them:
   - Require a pull request; no direct pushes; include administrators
   - Require status checks: `verify` (workflow CI) and `gate` (workflow Pipeline)
   - Require review from code owners
+- Security settings (Settings > Code security): turn on **secret scanning** and **push protection**, **Dependabot
+  alerts**, and **Dependabot security updates**. Code scanning (CodeQL) is optional; some of these need GitHub
+  Advanced Security on a private repository. `.github/dependabot.yml` and the weekly `security.yml` need no
+  extra setting.
 - Check, with a throwaway PR, that a required check whose job was skipped by an
   `if:` counts as passing. The workflows rely on that: `verify` is skipped on
   agent PRs, and `gate` reports `skip` on non-agent PRs.
 
 ## 4. CODEOWNERS (generated, never hand-edited)
-`harness/protected-paths.txt` is the single list of protected paths. Generate the
-file from it, and regenerate whenever the list changes:
+`harness/protected-paths.txt` lists the paths agents must never change, and
+`harness/human-approval-paths.txt` lists the ones they may change but only you may approve (the
+lockfile). Generate the file from both, and regenerate whenever either list changes:
 ```
-bash harness/bin/protected-paths.sh codeowners harness/protected-paths.txt @your-github-username > .github/CODEOWNERS
+bash harness/bin/protected-paths.sh codeowners harness/protected-paths.txt @your-github-username harness/human-approval-paths.txt > .github/CODEOWNERS
 ```
 A PR touching those paths cannot auto-merge without your review. The pipeline
 guard enforces the same list at run time, and withholding the `Workflows`
@@ -63,7 +68,7 @@ depend on them, and changing the `scripts` in `package.json` is blocked for agen
 
 | Script | Purpose |
 |---|---|
-| `typecheck`, `lint`, `arch`, `check:references`, `check:plan`, `check:ui`, `test:plan`, `test` | the parts of `verify:fast`. `lint` includes the file-naming check; `arch` fails if dependency-cruiser examines fewer modules than there are source files; `check:references` fails when a path mentioned in a workflow, script, config, doc or source file does not exist; `check:plan` validates `plan/features.*` and `plan/plan.json` when they exist; `check:ui` enforces design tokens, no inline styles, and where `'use client'` and `'use server'` may appear; `test:plan` runs the tests of the planning tools |
+| `check:files`, `typecheck`, `lint`, `arch`, `check:references`, `check:plan`, `check:ui`, `check:workflows`, `check:secrets`, `check:dependencies`, `test:plan`, `test` | the parts of `verify:fast`. `lint` includes the file-naming check; `arch` fails if dependency-cruiser examines fewer modules than there are source files; `check:references` fails when a path mentioned in a workflow, script, config, doc or source file does not exist; `check:plan` validates `plan/features.*` and `plan/plan.json` when they exist; `check:ui` enforces design tokens, no inline styles, and where `'use client'` and `'use server'` may appear; `check:workflows` requires pinned actions, declared permissions and no untrusted text in shell scripts; `check:secrets` looks for committed keys, tokens and env files; `check:dependencies` keeps pnpm's supply-chain settings on and the lockfile registry-only; `test:plan` runs the tests of the planning tools |
 | `verify:fast` | all of the above |
 | `verify` | `verify:fast` + `test:e2e` |
 | `test:e2e` | Playwright; builds and serves the production bundle itself |
@@ -77,19 +82,20 @@ depend on them, and changing the `scripts` in `package.json` is blocked for agen
 
 Dependencies the workflows need are already in `package.json`: `vercel`, `@playwright/test`,
 `server-only`. TypeScript is pinned to `^6`: dependency-cruiser does not support 7 yet.
-`pnpm-workspace.yaml` (`allowBuilds`) records which dependency build scripts may run, and is a
+`pnpm-workspace.yaml` records which dependency build scripts may run (`allowBuilds`), pnpm's
+supply-chain settings, and the reviewed exceptions and audit findings, each with its reason. It is a
 protected path.
 
 ## 6. Labels
 Created automatically when first used: `needs-human`, `round-1..3`,
 `regression`, `regression-attempt-1`, `digest-log`, `harness-feedback`, and, by plan sync,
-`plan-task`, `blocked`, `ready` and `ctx:<context>`. Create `ready` yourself if you label
-issues by hand.
+`plan-task`, `blocked`, `ready` and `ctx:<context>`; by the gate, `awaiting-approval`; by the
+weekly audit, `security`. Create `ready` yourself if you label issues by hand.
 
 ## 7. Verify before trusting
 - Flags in `harness/bin/run-agent.sh` against the agent CLI's current docs
-- Action versions in the workflows (`checkout`, `setup-node`, `pnpm/action-setup`,
-  `upload/download-artifact`, `create-github-app-token`): pin to current releases
+- Action versions: every action is already pinned to a commit (`pnpm check:workflows` enforces it), but
+  newer major versions exist. Dependabot proposes the upgrades; review each like a dependency
 - Vercel protection bypass for post-deploy tests
 
 ## 8. Dry run (with `AGENTS_ENABLED=false`)

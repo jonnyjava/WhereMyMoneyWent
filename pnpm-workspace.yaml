@@ -1,3 +1,45 @@
 allowBuilds:
   esbuild: false
   koffi: false
+
+# Supply-chain protections. pnpm enforces them on install and checks the lockfile against them.
+# This file is a protected path: an agent cannot weaken it, and `pnpm check:dependencies` fails if it is weakened.
+minimumReleaseAge: 10080        # never install a version published in the last 7 days (minutes)
+trustPolicy: no-downgrade       # refuse a package whose trust evidence is weaker than its earlier releases
+trustPolicyIgnoreAfter: 525600  # ...except versions older than a year, where old packages cause false alarms (minutes)
+blockExoticSubdeps: true        # only our own direct dependencies may come from git or tarball URLs
+
+# A reviewed exception, not a default, for Vercel's own packages (`vercel` and its `@vercel/*` helpers). Releases up to 58.4.4 carried npm provenance attestations; since
+# then it publishes from GitHub Actions through npm trusted publishing, which leaves no attestation in the registry
+# record, so pnpm reports every later release as a trust downgrade. The publisher identity is unchanged (checked
+# 2026-11-08). The package only runs in the deploy workflow. Revisit when pnpm reads trusted-publisher evidence.
+trustPolicyExclude:
+  - vercel
+  - '@vercel/*'
+
+# Reviewed and accepted audit findings (critical and high), recorded on 2026-11-08. All come through the `vercel` CLI,
+# a development tool that only runs in the deploy workflow. The shipped app has none: `pnpm audit --prod` reports 0.
+# The newest vercel release (65.12.1) has the same advisories, so an upgrade does not fix them, and forcing newer
+# versions of its bundled packages needs major-version jumps that cannot be tested without a Vercel account.
+# Anything NOT listed here is reported by the weekly security audit. Remove entries as upstream fixes them.
+auditConfig:
+  ignoreGhsas:
+    - GHSA-x8mw-p69m-v3mx  # @fastify/busboy (high)
+    - GHSA-2883-xcg3-v3hh  # js-yaml (high)
+    - GHSA-52cp-r559-cp3m  # js-yaml (high)
+    - GHSA-5p4m-2wfm-xmqj  # js-yaml (high)
+    - GHSA-23c5-xmqv-rm74  # minimatch (high)
+    - GHSA-3ppc-4f35-3m26  # minimatch (high)
+    - GHSA-7r86-cg39-jmmj  # minimatch (high)
+    - GHSA-9wv6-86v2-598j  # path-to-regexp (high)
+    - GHSA-j3q9-mxjg-w52f  # path-to-regexp (high)
+    - GHSA-7w5x-hrqm-74c2  # smol-toml (high)
+    - GHSA-23hp-3jrh-7fpw  # tar (critical)
+    - GHSA-8x88-c5mf-7j5w  # tar (high)
+    - GHSA-r292-9mhp-454m  # tar (high)
+    - GHSA-2m5v-pch6-74hx  # undici (high)
+    - GHSA-qrxm-fqhp-jwvm  # undici (high)
+    - GHSA-v9p9-hfj2-hcw8  # undici (high)
+    - GHSA-vrm6-8vpv-qv8q  # undici (high)
+    - GHSA-vxpw-j846-p89q  # undici (high)
+    - GHSA-mrhx-c7xc-m3w5  # zod (high)

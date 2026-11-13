@@ -49,7 +49,9 @@ reason. Commit them. Only then implement until they pass.
   criteria. No unrelated refactors, renames, or cleanups.
 - Never modify protected paths (see `harness/pipeline.md`).
 - Small commits with clear messages that reference the issue.
-- New dependency: only if needed, and justify it in the PR description.
+- New dependency: only if needed. Read `docs/conventions/dependencies.md`, install it with pnpm, and justify it in the PR
+  description. The PR then waits for a person's approval. If pnpm refuses the install (a very new version, a trust warning,
+  a package that wants an install script), do not work around it: choose an older version, or stop and ask.
 - Never commit secrets. Never push to `main`. Never merge your own PR.
 
 ## 5. Finish

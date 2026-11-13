@@ -51,8 +51,11 @@ const state = () => JSON.parse(readFileSync(stateFile(), 'utf8'));
 const MUTATING = /^(issue create|issue edit|label create|workflow run)/;
 
 function makeProject({ contexts = ['catalog', 'circulation'], mutate } = {}) {
+  if (dir) rmSync(dir, { recursive: true, force: true }); // a test may call this again: do not orphan the folder beforeEach made
   dir = mkdtempSync(join(tmpdir(), 'plan-sync-'));
   mkdirSync(join(dir, 'bin'));
+  // The stub is CommonJS. If TMPDIR sits inside the project, the nearest package.json would make it an ES module.
+  writeFileSync(join(dir, 'bin/package.json'), '{"type":"commonjs"}\n');
   writeFileSync(join(dir, 'bin/gh'), FAKE_GH);
   chmodSync(join(dir, 'bin/gh'), 0o755);
   writeFileSync(stateFile(), JSON.stringify({ issues: [], labels: [], calls: [] }));

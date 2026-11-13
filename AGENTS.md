@@ -7,12 +7,12 @@ Bounded contexts are NOT yet defined (see "Stop and ask").
 
 ## Commands
 - Runtime: Node (version in `.nvmrc`). pnpm only: never npm or yarn, never a second lockfile.
-- Install: `pnpm install --frozen-lockfile`. Add a dependency: `pnpm add <pkg>`, and justify it in the PR.
+- Install: `pnpm install --frozen-lockfile`. Add a dependency: `pnpm add <pkg>`, and justify it in the PR. A person approves every dependency change.
 - Env: copy `.env.example` to `.env.local`. Never commit real secrets.
 - Database: `docker compose up -d db`. `pnpm db:generate` creates a migration, `pnpm db:migrate` applies it.
 - Dev server: `PORT=<free port> pnpm dev`, started in the background and stopped when done.
   For exploring only; checks decide correctness. E2E tests start their own server.
-- Fast loop while working: `pnpm verify:fast` (typecheck, lint, architecture boundaries, path references, plan files, UI rules, unit and integration tests).
+- Fast loop while working: `pnpm verify:fast` (required files, typecheck, lint, architecture boundaries, path references, plan files, UI rules, workflow, secret and dependency checks, unit and integration tests).
 - Before declaring done: `pnpm verify` (adds Playwright e2e). CI runs the same checks in two stages.
 - If a check fails, read the output and fix the root cause. Never make a check pass by deleting or
   skipping tests, loosening lint or boundary rules, or adding ignore comments. If a check seems
@@ -70,6 +70,7 @@ Read the matching file BEFORE writing the code it covers, not after. List it und
 | wire things together, or expose a handler to a route or action | `docs/conventions/composition-root.md` |
 | raise, dispatch, or react to a domain event | `docs/conventions/domain-events.md` |
 | write or change a page, component, form or style | `docs/conventions/ui.md` |
+| add, remove or upgrade a dependency, change a workflow, or handle a secret | `docs/conventions/dependencies.md` |
 | write or change tests | `docs/conventions/testing.md` |
 
 ## Stop and ask
@@ -80,6 +81,7 @@ see, then stop work on the task, if:
 - you need to edit any path listed in `harness/protected-paths.txt` (this file, the conventions,
   CI config, lint and boundary rules, `tsconfig`, ...), the `scripts` in `package.json`,
   deployment config, or secrets
+- pnpm refuses an install under its supply-chain rules (a very new version, a trust warning, a source outside the registry), or a package wants an install script
 - the same check has failed 3 times in a row
 
 ## Workflow

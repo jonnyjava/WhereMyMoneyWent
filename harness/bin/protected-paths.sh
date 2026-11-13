@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Work with harness/protected-paths.txt, the single list of protected paths.
+# Work with the path lists: harness/protected-paths.txt (agents must never change these) and
+# harness/human-approval-paths.txt (agents may change these, but only a person may approve).
 #
 # Usage:
 #   bash harness/bin/protected-paths.sh match <list-file>  < files    # prints the files that match
-#   bash harness/bin/protected-paths.sh codeowners <list-file> <owner>  # prints CODEOWNERS lines
+#   bash harness/bin/protected-paths.sh codeowners <list-file> <owner> [<more-list-files>...]  # prints CODEOWNERS lines
 #
 # List syntax (subset of CODEOWNERS), one pattern per line, '#' starts a comment:
 #   /dir/         everything under dir
@@ -39,10 +40,12 @@ case "$mode" in
     ;;
   codeowners)
     owner="${3:?owner, e.g. @your-username}"
-    echo "# Generated from harness/protected-paths.txt. Do not edit by hand."
-    while IFS= read -r p; do
-      printf '%-34s %s\n' "$p" "$owner"
-    done < <(patterns)
+    for list in "$2" "${@:4}"; do
+      echo "# Generated from $list. Do not edit by hand."
+      while IFS= read -r p; do
+        printf '%-34s %s\n' "$p" "$owner"
+      done < <(patterns)
+    done
     ;;
   *)
     echo "unknown mode: $mode" >&2

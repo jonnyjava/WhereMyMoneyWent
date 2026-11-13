@@ -1,8 +1,8 @@
 # Paths agents must never modify. This file is the single source of truth for:
 #   - the pipeline guard (.github/workflows/pr-pipeline.yml), which reads it
 #     from the BASE branch so a PR cannot edit its own checklist
-#   - CODEOWNERS, which is generated from it:
-#       bash harness/bin/protected-paths.sh codeowners harness/protected-paths.txt @your-username > .github/CODEOWNERS
+#   - CODEOWNERS, which is generated from it and from harness/human-approval-paths.txt:
+#       bash harness/bin/protected-paths.sh codeowners harness/protected-paths.txt @your-username harness/human-approval-paths.txt > .github/CODEOWNERS
 # Syntax is a subset of CODEOWNERS (see harness/bin/protected-paths.sh).
 /AGENTS.md
 /harness/

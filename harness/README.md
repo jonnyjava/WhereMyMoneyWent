@@ -7,7 +7,8 @@ in `pipeline.md`; this page is the map.
 harness/
 ├── pipeline.md             the contract every role and workflow follows (stages, verdicts, rounds, escalation)
 ├── SETUP.md                the GitHub and Vercel checklist (App, secrets, branch protection, dry run)
-├── protected-paths.txt     paths agents must never modify: the ONE list, read by the guard and by CODEOWNERS
+├── protected-paths.txt     paths agents must never modify: read by the guard and by CODEOWNERS
+├── human-approval-paths.txt paths agents may change but only a person may approve (the lockfile)
 ├── roles/                  one prompt per agent role
 │   ├── coding-agent.md
 │   ├── architecture-reviewer.md
@@ -26,7 +27,7 @@ harness/
 |---|---|---|
 | `roles/*.md` | you, after seeing real reviews | weekly at first, then rarely |
 | `pipeline.md`, `bin/*` | you | rarely; change them together with `.github/workflows/` |
-| `protected-paths.txt` | you | rarely; then regenerate `.github/CODEOWNERS` (command in the file) |
+| `protected-paths.txt`, `human-approval-paths.txt` | you | rarely; then regenerate `.github/CODEOWNERS` (command in the file) |
 | `SETUP.md` | you | when infrastructure changes |
 
 Agents cannot edit any of this: the whole folder is a protected path.
@@ -37,9 +38,10 @@ The harness cannot live in one folder: tools fix the location of some files (`.g
 
 **1. Harness core. Copy unchanged into every project.**
 - `harness/` (this folder, except any project-specific lines in `protected-paths.txt`)
-- `.github/workflows/pr-pipeline.yml`, `coding-agent.yml`, `digest.yml`, `ci.yml`, `plan.yml`, `plan-sync.yml`
+- `.github/workflows/pr-pipeline.yml`, `coding-agent.yml`, `digest.yml`, `ci.yml`, `plan.yml`, `plan-sync.yml`, `security.yml`
+- `.github/dependabot.yml`
 - `.github/actions/setup/`, `.github/ISSUE_TEMPLATE/task.md`
-- `scripts/proofs/`, `scripts/plan/`, and `scripts/checks/check-references.mjs`
+- `scripts/proofs/`, `scripts/plan/`, and the checks `check-files.mjs`, `check-references.mjs`, `check-workflows.mjs`, `check-secrets.mjs`, `check-dependencies.mjs`
 - `plan/README.md` and the three example files in `plan/`
 
 **2. Stack profile. Copy to projects with the same stack** (Next.js, DDD, CQRS, Drizzle, Vitest, Playwright).

@@ -68,8 +68,8 @@ or migration tooling, and after upgrading TypeScript, ESLint, or dependency-crui
 ## Phase 6: GitHub, CI first, protection second
 Order matters, because a required check can only be selected after it has run once.
 1. Create the repo and push to `main` (protection is still off, so this one direct push is fine).
-2. Generate `CODEOWNERS` from the single protected-paths list:
-   `bash harness/bin/protected-paths.sh codeowners harness/protected-paths.txt @your-username > .github/CODEOWNERS`
+2. Generate `CODEOWNERS` from the two path lists (protected, and needs-approval):
+   `bash harness/bin/protected-paths.sh codeowners harness/protected-paths.txt @your-username harness/human-approval-paths.txt > .github/CODEOWNERS`
 3. Open a small human PR so that `CI / verify` and `Pipeline / gate` run once.
 4. Enable branch protection on `main` (`harness/SETUP.md`, section 3): require a PR, require the
    `verify` and `gate` checks and code-owner review, and include administrators.
@@ -101,7 +101,7 @@ Follow `harness/SETUP.md`, section 8, steps 1 to 3, with `AGENTS_ENABLED=false`:
 a draft `agent/*` PR is skipped, and a ready `agent/*` PR fails closed with the kill-switch message.
 Also check that a PR touching a protected path, or the `scripts` in `package.json`, is blocked.
 `pnpm test:pipeline` runs the guard and gate logic of the workflow against stubbed inputs
-(32 scenarios, including "fails closed when `gh` errors"), so you can check the decision logic
+(40 scenarios, including "fails closed when `gh` errors"), so you can check the decision logic
 before GitHub ever runs it.
 
 **Done when** all of those behave as described, on GitHub and in `pnpm test:pipeline`.
@@ -146,19 +146,27 @@ reviewers or the pipeline got wrong.
 ## What was verified, and what was not
 Verified by running it (Node 22, pnpm 12.16, TypeScript 6.0, PostgreSQL 16):
 - clean-checkout install and the complete `pnpm verify` with `CI=1`: typecheck, lint, naming,
-  architecture (99 modules, 19 rules), UI rules, 52 unit, component and integration tests (the
+  architecture (99 modules, 19 rules), UI, workflow, secret and dependency checks, 52 unit, component and integration tests (the
   integration ones against real Postgres), production build, and 7 e2e tests in Chromium including
   an accessibility scan
 - the post-deploy smoke tests, passing against a running server and failing against a dead one
 - the migration check in both modes (all files, and only files added on a branch)
-- 53 guardrail proofs, including the architecture self-check, the path-reference check, the UI rules, and the controls
+- 90 guardrail proofs, including the architecture self-check, the path-reference check, the UI rules, the supply-chain checks, and the controls
 - 63 tests of the planning tools (run against a stub `gh` and a stub planner, never against GitHub)
-- 32 scenarios for the pipeline's guard and gate logic, extracted verbatim from the workflow and run
+- 40 scenarios for the pipeline's guard and gate logic, extracted verbatim from the workflow and run
   under the same shell flags GitHub uses
 - `actionlint` on all workflows and `shellcheck` on all scripts
 
 **Not verified** (they need your accounts): any GitHub Actions run, the GitHub App, branch
 protection treating skipped checks as passing, Vercel deploy, promote, rollback and protection
-bypass, Neon, the agent CLI flags in `harness/bin/run-agent.sh`, the Plan and Plan sync workflows
-on GitHub, a planner answer from a real model, and Postgres 17 (CI and `docker-compose.yml` use 17,
+bypass, Neon, the agent CLI flags in `harness/bin/run-agent.sh`, the Plan, Plan sync and Security audit
+workflows on GitHub, Dependabot, the approval step on a real dependency pull request, a planner answer from a real model, and Postgres 17 (CI and `docker-compose.yml` use 17,
 the sandbox ran 16). The UI was checked in a headless browser only, never reviewed by eye.
+7. **Hidden files are lost by naive copies.** `cp -r starter/*` and some file pickers skip names that start with a dot, and the first
+   symptom is a confusing error far from the cause (`Can't open config file '.dependency-cruiser.cjs'`). The tool's advice, `depcruise --init`,
+   would create a config with none of the project's rules. `pnpm check:files` now lists every missing hidden file and runs first in
+   `verify:fast`, and `check-architecture.mjs` fails unless all 19 required rules are loaded as errors.
+8. **Tests that depend on the environment fail only in someone else's.** The planning tests failed under Node 20 (`node --test "glob"` does not expand a glob before Node 21) and in a
+   project path that contains a space (`new URL(...).pathname` percent-encodes it), and they copied whatever the live project had written in `docs/`. Now the shell expands the
+   glob, paths come from `fileURLToPath`, the tests carry their own fixture documents, a stub executable gets its own `package.json` (a temp folder inside the project would
+   otherwise make it an ES module), `check:files` reports an older Node than `engines` asks for, and every guardrail proof runs in a folder whose name contains a space.

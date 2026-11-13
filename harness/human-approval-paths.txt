@@ -1,0 +1,13 @@
+# Paths an agent MAY change, but only a person may approve.
+#
+# Unlike harness/protected-paths.txt (which an agent must never touch, so the pipeline refuses to run),
+# a pull request that touches a path here runs every check as usual. When all of them pass, the gate does
+# NOT arm auto-merge: it labels the pull request "awaiting-approval" and a person reviews and merges it.
+#
+#   - /pnpm-lock.yaml is the dependency list. Every change to a dependency changes it, because installs use
+#     --frozen-lockfile, so this one entry covers adding, removing, upgrading and re-resolving packages.
+#
+# The same list feeds CODEOWNERS, so branch protection ("Require review from Code Owners") makes the review binding:
+#   bash harness/bin/protected-paths.sh codeowners harness/protected-paths.txt @your-username harness/human-approval-paths.txt > .github/CODEOWNERS
+# Syntax is the same as protected-paths.txt (see harness/bin/protected-paths.sh).
+/pnpm-lock.yaml
