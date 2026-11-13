@@ -17,7 +17,7 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     env: {
       DATABASE_URL:
-        process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5432/app_test',
+        process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5432/where_my_money_went',
     },
   },
 });

@@ -3,7 +3,7 @@ services:
     image: postgres:17
     environment:
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: app_test
+      POSTGRES_DB: where_my_money_went
     ports:
       - '5432:5432'
     healthcheck:

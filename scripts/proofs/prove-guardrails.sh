@@ -15,7 +15,7 @@ WORK="$(mktemp -d)"
 REPO="$WORK/repo"
 trap 'rm -rf "$WORK"' EXIT
 
-export DATABASE_URL="${DATABASE_URL:-postgres://postgres:postgres@localhost:5432/app_test}"
+export DATABASE_URL="${DATABASE_URL:-postgres://postgres:postgres@localhost:5432/where_my_money_went}"
 PASS=0
 FAIL=0
 

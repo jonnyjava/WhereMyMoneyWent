@@ -3,7 +3,7 @@ import { defineConfig } from 'vitest/config';
 
 // Integration tests use the local Postgres from docker-compose.yml. CI sets
 // DATABASE_URL itself. A missing database makes those tests FAIL, never skip.
-process.env.DATABASE_URL ??= 'postgres://postgres:postgres@localhost:5432/app_test';
+process.env.DATABASE_URL ??= 'postgres://postgres:postgres@localhost:5432/where_my_money_went';
 
 export default defineConfig({
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
