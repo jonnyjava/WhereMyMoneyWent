@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schemas/feature-spec.schema.json",
+  "title": "Feature file",
+  "description": "What a person hands to the planner: a project and its features. Criteria may be rough here; the planner turns them into testable ones.",
+  "type": "object",
+  "required": ["project", "features"],
+  "additionalProperties": false,
+  "properties": {
+    "project": { "type": "string", "minLength": 1 },
+    "summary": { "type": "string" },
+    "constraints": {
+      "description": "Rules that apply to the whole project (security, compliance, budgets, technology limits).",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "features": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/feature" }
+    }
+  },
+  "$defs": {
+    "feature": {
+      "type": "object",
+      "required": ["id", "title", "goal"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^F-[0-9]{3}$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "goal": { "description": "What becomes possible, and why.", "type": "string", "minLength": 1, "maxLength": 400 },
+        "priority": { "enum": ["must", "should", "could"] },
+        "depends_on": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^F-[0-9]{3}$" } },
+        "context": { "description": "Optional hint for the bounded context.", "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+        "criteria": { "description": "Rough acceptance criteria, if you have them.", "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "out_of_scope": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "notes": { "type": "string" }
+      }
+    }
+  }
+}

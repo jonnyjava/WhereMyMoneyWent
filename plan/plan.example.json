@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "project": "Neighborhood Library",
+  "source": "plan/features.example.md",
+  "policy": { "max_parallel": 2 },
+  "contexts": [
+    {
+      "name": "catalog",
+      "purpose": "Which books exist and whether a copy is on the shelf.",
+      "status": "proposed",
+      "terms": [
+        { "term": "Book", "meaning": "A title the library owns, with an author." },
+        { "term": "Availability", "meaning": "Whether a copy of a book is on the shelf right now." }
+      ]
+    },
+    {
+      "name": "circulation",
+      "purpose": "Loans: a member borrows a book until a due date, then returns it.",
+      "status": "proposed",
+      "terms": [
+        { "term": "Loan", "meaning": "A member holds a book until its due date." },
+        { "term": "Member", "meaning": "A person identified by an email address." }
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "List books with availability",
+      "feature": "F-001",
+      "context": "catalog",
+      "goal": "Anyone can see every book and whether it is available.",
+      "criteria": [
+        "Anyone can request the list of books and receives each book's title, author and availability.",
+        "A book with no copy on the shelf is listed as unavailable.",
+        "An empty catalog returns an empty list, not an error."
+      ],
+      "out_of_scope": ["Searching or filtering", "Adding or removing books"],
+      "open_questions": [],
+      "depends_on": [],
+      "size": "S"
+    },
+    {
+      "id": "T-002",
+      "title": "Search books by title",
+      "feature": "F-001",
+      "context": "catalog",
+      "goal": "Anyone can find books by part of the title.",
+      "criteria": [
+        "Searching for a title fragment returns only books whose title contains it, ignoring case.",
+        "A search with no matches returns an empty list.",
+        "A search with blank text is rejected with a message that search text is required."
+      ],
+      "out_of_scope": ["Searching by author", "Sorting results"],
+      "open_questions": [],
+      "depends_on": ["T-001"],
+      "size": "S"
+    },
+    {
+      "id": "T-003",
+      "title": "Open a loan for an available book",
+      "feature": "F-002",
+      "context": "circulation",
+      "goal": "A member can borrow an available book.",
+      "criteria": [
+        "A member who borrows an available book gets a loan due 14 days after today.",
+        "Borrowing a book that is already out is refused, and the existing loan is unchanged.",
+        "Borrowing with an invalid email address is rejected before any loan is created.",
+        "After a successful loan the book is listed as unavailable."
+      ],
+      "out_of_scope": ["Extending a loan", "Limits on how many books a member can hold"],
+      "open_questions": [],
+      "depends_on": ["T-001"],
+      "size": "M"
+    },
+    {
+      "id": "T-004",
+      "title": "Show a loan",
+      "feature": "F-002",
+      "context": "circulation",
+      "goal": "Anyone with a loan id can see the loan.",
+      "criteria": [
+        "Asking for a loan by its id returns the member email, the book, the due date and whether it was returned.",
+        "Asking for an unknown loan id returns a not-found result."
+      ],
+      "out_of_scope": ["Listing all loans of a member"],
+      "open_questions": [],
+      "depends_on": ["T-003"],
+      "size": "S"
+    },
+    {
+      "id": "T-005",
+      "title": "Return a borrowed book",
+      "feature": "F-003",
+      "context": "circulation",
+      "goal": "A member can return a book so it becomes available again.",
+      "criteria": [
+        "Returning a borrowed book marks the loan returned and lists the book as available again.",
+        "Returning a book that was already returned is refused.",
+        "Returning with an unknown loan id returns a not-found result."
+      ],
+      "out_of_scope": ["Late fees"],
+      "open_questions": [],
+      "depends_on": ["T-003"],
+      "size": "S"
+    }
+  ]
+}

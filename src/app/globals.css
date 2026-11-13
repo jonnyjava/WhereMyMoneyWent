@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+/*
+  Design tokens. A person edits this file (it is a protected path); components use only
+  the semantic names below (bg-surface, text-ink, border-line, ...), never raw colors.
+  Tailwind's default palette is removed on purpose, so a class such as bg-red-500 builds to nothing.
+*/
+@theme {
+  --color-*: initial;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+}
+
+:root {
+  --surface: #ffffff;
+  --surface-raised: #f3f5f7;
+  --ink: #12202b;
+  --muted: #4a5a68;
+  --line: #c9d2da;
+  --field: #6b7a88;
+  --accent: #0b5fd0;
+  --accent-ink: #ffffff;
+  --danger: #b42318;
+  --danger-soft: #fef3f2;
+  --success: #0a6b3a;
+  --success-soft: #ecfdf3;
+  --info-soft: #eef4ff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #0f1720;
+    --surface-raised: #17212b;
+    --ink: #e8eef3;
+    --muted: #a3b2bf;
+    --line: #2f3d4a;
+    --field: #7b8c9b;
+    --accent: #6ea8ff;
+    --accent-ink: #08121f;
+    --danger: #ff8f84;
+    --danger-soft: #2a1514;
+    --success: #6fdc9d;
+    --success-soft: #11251a;
+    --info-soft: #14233a;
+  }
+}
+
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-field: var(--field);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-info-soft: var(--info-soft);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --radius-control: 0.5rem;
+}

@@ -1,0 +1,48 @@
+{
+  "project": "Neighborhood Library",
+  "summary": "A small web service where members borrow and return books from a shared catalog.",
+  "constraints": [
+    "Members are identified by their email address.",
+    "A loan lasts 14 days and can be extended once."
+  ],
+  "features": [
+    {
+      "id": "F-001",
+      "title": "Browse the catalog",
+      "goal": "Anyone can see which books exist and whether they are available.",
+      "priority": "must",
+      "context": "catalog",
+      "criteria": [
+        "Anyone can list all books with title, author and availability.",
+        "Searching by title returns only matching books."
+      ],
+      "out_of_scope": ["Reserving a book that is out."]
+    },
+    {
+      "id": "F-002",
+      "title": "Borrow a book",
+      "goal": "A member can borrow an available book.",
+      "priority": "must",
+      "depends_on": ["F-001"],
+      "context": "circulation",
+      "criteria": [
+        "A member can borrow an available book.",
+        "Borrowing a book that is already out is refused.",
+        "The due date is 14 days after the borrow date."
+      ]
+    },
+    {
+      "id": "F-003",
+      "title": "Return a book",
+      "goal": "A member can return a borrowed book so it becomes available again.",
+      "priority": "must",
+      "depends_on": ["F-002"],
+      "context": "circulation",
+      "criteria": [
+        "Returning a loaned book makes it available again.",
+        "Returning a book twice is refused."
+      ],
+      "notes": "Late fees are decided later and are not part of this version."
+    }
+  ]
+}
