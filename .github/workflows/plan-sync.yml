@@ -1,0 +1,50 @@
+name: Plan sync
+
+# Keeps task issues in step with the approved plan (plan/plan.json):
+#   1. creates the issue of every task that has none
+#   2. releases the tasks that may start: label ready, and start the coding agent
+# A task may start when its dependencies are closed, its context exists, it has no open
+# questions, and fewer than policy.max_parallel tasks are in flight.
+# It runs when the plan changes, when a context is created, when a task issue closes
+# (its pull request merged), and on demand. Running it twice changes nothing.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - plan/plan.json
+      - src/contexts/*/index.ts
+  issues:
+    types: [closed]
+  workflow_dispatch:
+
+concurrency:
+  group: plan-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+  actions: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  sync:
+    if: >-
+      vars.AGENTS_ENABLED != 'false' && (
+        github.event_name != 'issues' ||
+        contains(github.event.issue.labels.*.name, 'plan-task')
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: ./.github/actions/setup
+      - name: Sync issues with the plan
+        run: node scripts/plan/sync-issues.mjs --apply

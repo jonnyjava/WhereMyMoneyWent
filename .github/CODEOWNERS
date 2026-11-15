@@ -1,0 +1,19 @@
+# Generated from harness/protected-paths.txt. Do not edit by hand.
+/AGENTS.md                         @jonnyjava
+/harness/                          @jonnyjava
+/docs/conventions/                 @jonnyjava
+/.github/                          @jonnyjava
+/.dependency-cruiser.cjs           @jonnyjava
+/eslint.config.*                   @jonnyjava
+/tsconfig*.json                    @jonnyjava
+/playwright*.config.ts             @jonnyjava
+/vitest.config.ts                  @jonnyjava
+/drizzle.config.ts                 @jonnyjava
+/scripts/                          @jonnyjava
+/pnpm-workspace.yaml               @jonnyjava
+/.npmrc                            @jonnyjava
+/plan/                             @jonnyjava
+/postcss.config.*                  @jonnyjava
+/src/app/globals.css               @jonnyjava
+# Generated from harness/human-approval-paths.txt. Do not edit by hand.
+/pnpm-lock.yaml                    @jonnyjava

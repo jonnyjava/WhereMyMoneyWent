@@ -1,0 +1,94 @@
+name: Security audit
+
+# A weekly check of the dependency tree against the public advisory database. A PERSON decides what to do with
+# a finding: nothing here starts an agent.
+#   - production dependencies (the shipped app): ANY advisory is a finding
+#   - all dependencies, including tooling: critical and high advisories are findings, except the ones recorded in
+#     pnpm-workspace.yaml (auditConfig.ignoreGhsas) after review
+# A finding opens (or updates) one issue labeled "security"; a clean run closes it.
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: security-audit
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: ./.github/actions/setup
+
+      - name: Audit
+        id: audit
+        run: |
+          set +e
+          pnpm audit --prod --audit-level=low > audit-prod.txt 2>&1
+          prod=$?
+          pnpm audit --audit-level=high > audit-all.txt 2>&1
+          all=$?
+          set -e
+          {
+            echo "prod=$prod"
+            echo "all=$all"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "### Dependency audit"
+            echo
+            if [ "$prod" -eq 0 ]; then echo "- production dependencies: clean"; else echo "- production dependencies: FINDINGS"; fi
+            if [ "$all" -eq 0 ]; then echo "- all dependencies, critical and high: clean"; else echo "- all dependencies, critical and high: FINDINGS"; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open, update or close the issue
+        env:
+          PROD: ${{ steps.audit.outputs.prod }}
+          ALL: ${{ steps.audit.outputs.all }}
+        run: |
+          title="Security audit: dependency advisories"
+          gh label create security --color B60205 --description "Dependency or security finding" 2>/dev/null || true
+          number="$(gh issue list --label security --state open --json number,title | jq -r --arg t "$title" '[.[] | select(.title == $t)][0].number // empty')"
+          if [ "$PROD" -eq 0 ] && [ "$ALL" -eq 0 ]; then
+            if [ -n "$number" ]; then gh issue close "$number" --comment "The weekly audit is clean."; fi
+            echo "Audit clean."
+            exit 0
+          fi
+          {
+            echo "The weekly dependency audit found advisories. A person decides: upgrade the package, or review the advisory and record it in pnpm-workspace.yaml (auditConfig.ignoreGhsas) with the reason."
+            echo
+            echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            if [ "$PROD" -ne 0 ]; then
+              echo
+              echo "Production dependencies (the shipped app):"
+              echo
+              head -c 20000 audit-prod.txt | sed 's/^/    /'
+            fi
+            if [ "$ALL" -ne 0 ]; then
+              echo
+              echo "All dependencies, critical and high:"
+              echo
+              head -c 20000 audit-all.txt | sed 's/^/    /'
+            fi
+          } > body.md
+          if [ -z "$number" ]; then
+            gh issue create --title "$title" --label security --body-file body.md
+          else
+            gh issue edit "$number" --body-file body.md
+          fi
+          echo "::error::The audit found advisories. See the issue labeled security."
+          exit 1

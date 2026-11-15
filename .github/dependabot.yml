@@ -1,0 +1,36 @@
+# Dependabot opens the dependency and GitHub Actions update pull requests.
+# These come from a bot branch (dependabot/...), not an agent branch, so they run the ordinary CI and a PERSON
+# reviews and merges them (the lockfile is on harness/human-approval-paths.txt). Nothing here starts an agent.
+#
+# The cooldown matches pnpm's minimumReleaseAge (7 days): a version is not proposed until it has aged, and pnpm
+# would refuse to install it sooner anyway. Major versions wait twice as long.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: UTC
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    labels: [dependencies]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: UTC
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    labels: [dependencies]
