@@ -1,0 +1,131 @@
+{
+  "version": 1,
+  "project": "Where My Money Went",
+  "source": "plan/features.md",
+  "policy": { "max_parallel": 2 },
+  "contexts": [
+    {
+      "name": "expenses",
+      "purpose": "Expense categories and subcategories a user owns, and the expenses recorded under them.",
+      "status": "proposed",
+      "terms": [
+        { "term": "User", "meaning": "A person identified by their email address." },
+        { "term": "ExpenseCategory", "meaning": "A named grouping of expenses that belongs to a user and is unique among that user's categories." },
+        { "term": "ExpenseSubcategory", "meaning": "A named detail under one expense-category, unique within that category and deletable with it." },
+        { "term": "Expense", "meaning": "An amount spent on a date, attributed either to an expense-category or to one of its expense-subcategories." }
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Manage expense-categories",
+      "feature": "F-001",
+      "context": "expenses",
+      "goal": "A user can create, edit and delete the expense-categories that group their expenses.",
+      "criteria": [
+        "A user can create an expense-category with a name and receives it back.",
+        "A user can rename an existing expense-category and delete an existing one.",
+        "Creating or renaming to a name the same user already uses for another expense-category is refused.",
+        "Every category created is owned by the requesting user."
+      ],
+      "out_of_scope": ["Subcategories", "User registration and login"],
+      "open_questions": [],
+      "depends_on": [],
+      "size": "M"
+    },
+    {
+      "id": "T-002",
+      "title": "List the user's expense-categories",
+      "feature": "F-001",
+      "context": "expenses",
+      "goal": "A user can see all their expense-categories, including the list shown alongside the creation form.",
+      "criteria": [
+        "A user can request the list of their expense-categories and receives each name.",
+        "The list contains only the requested user's expense-categories, never another user's.",
+        "A user with no expense-categories receives an empty list, and requesting the list without a known user is rejected."
+      ],
+      "out_of_scope": ["Categories of other users", "Sorting or filtering"],
+      "open_questions": [],
+      "depends_on": ["T-001"],
+      "size": "S"
+    },
+    {
+      "id": "T-003",
+      "title": "Manage expense-subcategories",
+      "feature": "F-002",
+      "context": "expenses",
+      "goal": "A user can create, edit and delete as many expense-subcategories as needed under an expense-category.",
+      "criteria": [
+        "A user can create an expense-subcategory under an expense-category they own.",
+        "A user can rename an expense-subcategory and delete it.",
+        "Creating or renaming to a name already used by a subcategory of the same expense-category is refused, while the same name under a different expense-category is allowed.",
+        "Deleting an expense-category deletes all of its expense-subcategories in cascade.",
+        "Acting on an expense-category or expense-subcategory the user does not own is refused."
+      ],
+      "out_of_scope": ["Subcategories without a parent expense-category", "User registration and login"],
+      "open_questions": [],
+      "depends_on": ["T-001"],
+      "size": "M"
+    },
+    {
+      "id": "T-004",
+      "title": "List the expense-subcategories of a category",
+      "feature": "F-002",
+      "context": "expenses",
+      "goal": "A user can see the expense-subcategories belonging to one expense-category.",
+      "criteria": [
+        "A user can request the expense-subcategories of an expense-category they own and receives each name.",
+        "The list contains only subcategories of the requested expense-category, and only for a category the user owns.",
+        "An expense-category with no expense-subcategory returns an empty list.",
+        "Asking for the expense-subcategories of an expense-category that does not exist is not found.",
+        "After an expense-category is deleted its expense-subcategories are no longer listed."
+      ],
+      "out_of_scope": ["Subcategories of other users", "Subcategories across several categories at once"],
+      "open_questions": [],
+      "depends_on": ["T-003"],
+      "size": "S"
+    },
+    {
+      "id": "T-005",
+      "title": "Register an expense",
+      "feature": "F-003",
+      "context": "expenses",
+      "goal": "A user can register an expense, attributed to a category or to one of its subcategories.",
+      "criteria": [
+        "A user can create an expense with an amount greater than 0, a date defaulting to today, and a target that is either an owned expense-category with no expense-subcategory or an owned expense-subcategory.",
+        "A user can edit and delete an expense they own.",
+        "An amount of 0 or less is refused and no expense is stored.",
+        "A target that is not owned by the user, or that does not exist, is refused.",
+        "The owning user is recorded with the expense but is never accepted as input nor returned to the user.",
+        "An expense-category that still has expense-subcategories is refused as a target."
+      ],
+      "out_of_scope": ["User registration and login", "Currencies and exchange rates"],
+      "open_questions": [
+        "Is a subcategory required to be chosen when the chosen expense-category has subcategories, and may an expense move between categories when it is edited?"
+      ],
+      "depends_on": ["T-002", "T-003"],
+      "size": "M"
+    },
+    {
+      "id": "T-006",
+      "title": "List expenses ordered by date",
+      "feature": "F-003",
+      "context": "expenses",
+      "goal": "A user can see the expenses listed under the registration form, newest information first by date.",
+      "criteria": [
+        "A user can request their expenses and receives amount, date and the category or subcategory each belongs to.",
+        "Expenses are returned ordered by date.",
+        "The list contains only the requested user's expenses.",
+        "After an expense is deleted it no longer appears in the list.",
+        "A user with no expenses receives an empty list, and requesting the list without a known user is rejected."
+      ],
+      "out_of_scope": ["Filtering by period or category", "Totals and charts"],
+      "open_questions": [
+        "How should expenses sharing the same date be ordered among themselves?"
+      ],
+      "depends_on": ["T-005"],
+      "size": "S"
+    }
+  ]
+}
