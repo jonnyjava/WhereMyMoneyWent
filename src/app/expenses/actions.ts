@@ -3,7 +3,14 @@
 import { revalidatePath } from 'next/cache';
 import { getContainer } from '@/composition/container';
 import type { FormState } from './form-state';
-import { createCategoryMessage, deleteCategoryMessage, renameCategoryMessage } from './messages';
+import {
+  createCategoryMessage,
+  createSubcategoryMessage,
+  deleteCategoryMessage,
+  deleteSubcategoryMessage,
+  renameCategoryMessage,
+  renameSubcategoryMessage,
+} from './messages';
 
 // Server actions are the only way the UI changes anything. Each one: reads the form (shape only),
 // calls ONE command handler, and turns the Result into a FormState. Business rules stay in the domain.
@@ -54,4 +61,54 @@ export async function deleteCategoryAction(_previous: FormState, formData: FormD
   if (!result.ok) return { status: 'error', message: deleteCategoryMessage(result.error) };
   revalidatePath(PATH);
   return { status: 'success', message: 'Category deleted.' };
+}
+
+export async function createSubcategoryAction(_previous: FormState, formData: FormData): Promise<FormState> {
+  const categoryId = text(formData, 'categoryId');
+  const userEmail = text(formData, 'userEmail');
+  const name = text(formData, 'name');
+  const values = { name };
+  if (name === '') {
+    return { status: 'error', message: 'Enter a name for the subcategory.', values };
+  }
+  const result = await getContainer().createExpenseSubcategory.execute({
+    categoryId,
+    subcategoryId: crypto.randomUUID(),
+    userEmail,
+    name,
+  });
+  if (!result.ok) return { status: 'error', message: createSubcategoryMessage(result.error), values };
+  revalidatePath(PATH);
+  return { status: 'success', message: 'Subcategory added.' };
+}
+
+export async function renameSubcategoryAction(_previous: FormState, formData: FormData): Promise<FormState> {
+  const categoryId = text(formData, 'categoryId');
+  const subcategoryId = text(formData, 'subcategoryId');
+  const userEmail = text(formData, 'userEmail');
+  const name = text(formData, 'name');
+  const values = { name };
+  if (name === '') {
+    return { status: 'error', message: 'Enter a name for the subcategory.', values };
+  }
+  const result = await getContainer().renameExpenseSubcategory.execute({
+    categoryId,
+    subcategoryId,
+    userEmail,
+    name,
+  });
+  if (!result.ok) return { status: 'error', message: renameSubcategoryMessage(result.error), values };
+  revalidatePath(PATH);
+  return { status: 'success', message: 'Subcategory renamed.' };
+}
+
+export async function deleteSubcategoryAction(_previous: FormState, formData: FormData): Promise<FormState> {
+  const result = await getContainer().deleteExpenseSubcategory.execute({
+    categoryId: text(formData, 'categoryId'),
+    subcategoryId: text(formData, 'subcategoryId'),
+    userEmail: text(formData, 'userEmail'),
+  });
+  if (!result.ok) return { status: 'error', message: deleteSubcategoryMessage(result.error) };
+  revalidatePath(PATH);
+  return { status: 'success', message: 'Subcategory deleted.' };
 }
