@@ -58,4 +58,3 @@ postgres-data
 # Misc
 *.pem
 .vercel
-.dependency-cruiser.cjs
