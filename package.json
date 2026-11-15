@@ -18,7 +18,7 @@
     "test:postdeploy": "playwright test --config playwright.postdeploy.config.ts",
     "check:migrations": "node scripts/checks/check-migrations.mjs",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "node scripts/db/migrate.mjs",
+    "db:migrate": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/db/migrate.mjs",
     "verify:fast": "pnpm check:files && pnpm typecheck && pnpm lint && pnpm arch && pnpm check:references && pnpm check:plan && pnpm check:ui && pnpm check:workflows && pnpm check:secrets && pnpm check:dependencies && pnpm test:plan && pnpm test",
     "verify": "pnpm verify:fast && pnpm test:e2e",
     "prove:guardrails": "bash scripts/proofs/prove-guardrails.sh",
