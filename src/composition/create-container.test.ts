@@ -16,7 +16,7 @@ describe('composition root (both contexts, real Postgres, real event bus)', () =
   });
   beforeEach(async () => {
     await admin`TRUNCATE reference.loans, reference.return_counters`;
-    await admin`TRUNCATE expenses.expense_subcategories, expenses.expense_categories`;
+    await admin`TRUNCATE expenses.expenses, expenses.expense_subcategories, expenses.expense_categories`;
   });
   afterAll(async () => {
     await container.close();
@@ -72,5 +72,27 @@ describe('composition root (both contexts, real Postgres, real event bus)', () =
       userEmail: 'ada@example.com',
     });
     expect(listed.ok && listed.value).toEqual([{ id: 'subcategory-1', name: 'Groceries' }]);
+  });
+
+  it('registers and lists expenses through the wiring', async () => {
+    await container.createExpenseCategory.execute({
+      categoryId: 'category-1',
+      userEmail: 'ada@example.com',
+      name: 'Food',
+    });
+
+    const registered = await container.registerExpense.execute({
+      expenseId: 'expense-1',
+      userEmail: 'ada@example.com',
+      amountCents: 1250,
+      spentOn: '2026-01-10',
+      categoryId: 'category-1',
+    });
+    expect(registered.ok && registered.value).toBe('expense-1');
+
+    const listed = await container.listExpenses.execute({ userEmail: 'ada@example.com' });
+    expect(listed.ok && listed.value).toMatchObject([
+      { id: 'expense-1', amountCents: 1250, spentOn: '2026-01-10', categoryId: 'category-1' },
+    ]);
   });
 });
