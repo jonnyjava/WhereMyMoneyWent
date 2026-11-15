@@ -1,8 +1,10 @@
 import { err, ok, type Result } from '@/shared/result';
 import type { Email } from './email.value-object';
-import type { InvalidCategoryName } from './expense-category.error';
+import type { ExpenseCategoryHasSubcategories, InvalidCategoryName } from './expense-category.error';
+import { expenseCategoryHasSubcategories } from './expense-category.error';
 import { ExpenseCategoryName } from './expense-category-name.value-object';
 import { ExpenseSubcategory } from './expense-subcategory.entity';
+import type { ExpenseTarget } from './expense-target.value-object';
 import type {
   ExpenseSubcategoryNotFound,
   InvalidSubcategoryName,
@@ -119,6 +121,22 @@ export class ExpenseCategory {
     this.props.subcategories = this.props.subcategories.map((subcategory) =>
       subcategory.id === subcategoryId ? renamed.value : subcategory,
     );
+    return ok(undefined);
+  }
+
+  /**
+   * Checks that this expense-category can be the target of an expense: a subcategory target must
+   * name one of its expense-subcategories, and a direct target is refused while the category still
+   * has expense-subcategories.
+   */
+  validateTarget(
+    target: ExpenseTarget,
+  ): Result<void, ExpenseCategoryHasSubcategories | ExpenseSubcategoryNotFound> {
+    if (target.kind === 'subcategory') {
+      const known = this.props.subcategories.some((subcategory) => subcategory.id === target.subcategoryId);
+      return known ? ok(undefined) : err(expenseSubcategoryNotFound(target.subcategoryId));
+    }
+    if (this.props.subcategories.length > 0) return err(expenseCategoryHasSubcategories(this.props.id));
     return ok(undefined);
   }
 

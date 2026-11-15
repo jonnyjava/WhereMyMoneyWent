@@ -17,3 +17,6 @@ Expense categories and subcategories a user owns, and the expenses recorded unde
 
 ## Proposed terms
 <!-- Agents add entries here: term, context, one-line meaning, why it is needed. -->
+- **Amount** (`expenses`): a positive sum of money in cents; there is no currency, because currencies and exchange rates are out of scope.
+- **Expense date** (`expenses`): the calendar day an expense was spent on, `YYYY-MM-DD`, without a time or a time zone; it defaults to today.
+- **Expense target** (`expenses`): what an expense is attributed to, either an expense-category or one of its expense-subcategories; a category that still has expense-subcategories is not a valid target.

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Email } from './email.value-object';
 import { ExpenseCategory } from './expense-category.aggregate';
+import { categoryTarget, subcategoryTarget } from './expense-target.value-object';
 
 const owner = Email.reconstitute('ada@example.com');
 const now = new Date('2026-01-01T00:00:00Z');
@@ -147,6 +148,47 @@ describe('ExpenseCategory', () => {
 
     expect(removed.ok).toBe(true);
     expect(category.value.subcategories).toEqual([]);
+  });
+
+  it('accepts a category without expense-subcategories as the target of an expense', () => {
+    const category = ExpenseCategory.create({ id: 'category-1', name: 'Food', ownerEmail: owner }, now);
+    if (!category.ok) throw new Error('fixture must be valid');
+
+    const allowed = category.value.validateTarget(categoryTarget('category-1'));
+
+    expect(allowed.ok).toBe(true);
+  });
+
+  it('refuses a category that still has expense-subcategories as the target of an expense', () => {
+    const category = ExpenseCategory.create({ id: 'category-1', name: 'Food', ownerEmail: owner }, now);
+    if (!category.ok) throw new Error('fixture must be valid');
+    if (!category.value.addSubcategory({ id: 'subcategory-1', name: 'Groceries' }).ok) throw new Error('fixture');
+
+    const allowed = category.value.validateTarget(categoryTarget('category-1'));
+
+    expect(allowed.ok).toBe(false);
+    expect(!allowed.ok && allowed.error.kind).toBe('ExpenseCategoryHasSubcategories');
+  });
+
+  it('accepts one of its own expense-subcategories as the target of an expense', () => {
+    const category = ExpenseCategory.create({ id: 'category-1', name: 'Food', ownerEmail: owner }, now);
+    if (!category.ok) throw new Error('fixture must be valid');
+    if (!category.value.addSubcategory({ id: 'subcategory-1', name: 'Groceries' }).ok) throw new Error('fixture');
+
+    const allowed = category.value.validateTarget(subcategoryTarget('category-1', 'subcategory-1'));
+
+    expect(allowed.ok).toBe(true);
+  });
+
+  it('refuses an expense-subcategory that the category does not have', () => {
+    const category = ExpenseCategory.create({ id: 'category-1', name: 'Food', ownerEmail: owner }, now);
+    if (!category.ok) throw new Error('fixture must be valid');
+    if (!category.value.addSubcategory({ id: 'subcategory-1', name: 'Groceries' }).ok) throw new Error('fixture');
+
+    const allowed = category.value.validateTarget(subcategoryTarget('category-1', 'missing'));
+
+    expect(allowed.ok).toBe(false);
+    expect(!allowed.ok && allowed.error.kind).toBe('ExpenseSubcategoryNotFound');
   });
 
   it('refuses to remove an expense-subcategory that does not exist', () => {

@@ -14,3 +14,12 @@ export const expenseCategoryNameAlreadyExists = (name: string): ExpenseCategoryN
   kind: 'ExpenseCategoryNameAlreadyExists',
   name,
 });
+export type ExpenseCategoryHasSubcategories = {
+  readonly kind: 'ExpenseCategoryHasSubcategories';
+  readonly categoryId: string;
+};
+
+export const expenseCategoryHasSubcategories = (categoryId: string): ExpenseCategoryHasSubcategories => ({
+  kind: 'ExpenseCategoryHasSubcategories',
+  categoryId,
+});
