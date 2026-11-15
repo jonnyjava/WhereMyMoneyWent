@@ -59,4 +59,3 @@ postgres-data
 *.pem
 .vercel
 .dependency-cruiser.cjs
-.nvmrc
