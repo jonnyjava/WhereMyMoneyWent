@@ -16,6 +16,7 @@ describe('composition root (both contexts, real Postgres, real event bus)', () =
   });
   beforeEach(async () => {
     await admin`TRUNCATE reference.loans, reference.return_counters`;
+    await admin`TRUNCATE expenses.expense_categories`;
   });
   afterAll(async () => {
     await container.close();
@@ -37,5 +38,17 @@ describe('composition root (both contexts, real Postgres, real event bus)', () =
     expect(await container.getReturnCount.execute({})).toBe(1);
     const loan = await container.getLoan.execute({ loanId: 'loan-1' });
     expect(loan.ok && loan.value.returned).toBe(true);
+  });
+
+  it('creates and lists expense-categories through the wiring', async () => {
+    const created = await container.createExpenseCategory.execute({
+      categoryId: 'category-1',
+      userEmail: 'ada@example.com',
+      name: 'Food',
+    });
+    expect(created.ok && created.value).toEqual({ id: 'category-1', name: 'Food' });
+
+    const listed = await container.listExpenseCategories.execute({ userEmail: 'ada@example.com' });
+    expect(listed.ok && listed.value).toEqual([{ id: 'category-1', name: 'Food' }]);
   });
 });

@@ -10,6 +10,11 @@ export default function HomePage() {
           Open the reference UI example
         </Link>
       </p>
+      <p>
+        <Link href="/expenses" className="text-accent underline">
+          Track your expenses
+        </Link>
+      </p>
     </PageShell>
   );
 }
