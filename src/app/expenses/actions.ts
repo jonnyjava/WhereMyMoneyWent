@@ -7,7 +7,10 @@ import {
   createCategoryMessage,
   createSubcategoryMessage,
   deleteCategoryMessage,
+  deleteExpenseMessage,
   deleteSubcategoryMessage,
+  editExpenseMessage,
+  registerExpenseMessage,
   renameCategoryMessage,
   renameSubcategoryMessage,
 } from './messages';
@@ -111,4 +114,75 @@ export async function deleteSubcategoryAction(_previous: FormState, formData: Fo
   if (!result.ok) return { status: 'error', message: deleteSubcategoryMessage(result.error) };
   revalidatePath(PATH);
   return { status: 'success', message: 'Subcategory deleted.' };
+}
+export async function registerExpenseAction(_previous: FormState, formData: FormData): Promise<FormState> {
+  const userEmail = text(formData, 'userEmail');
+  const amount = text(formData, 'amount');
+  const spentOn = text(formData, 'spentOn');
+  const target = text(formData, 'target');
+  const values = { amount, spentOn, target }; // given back on error, so the form keeps what was typed
+  const amountCents = parseAmountToCents(amount);
+  if (amountCents === null) {
+    return { status: 'error', message: 'Enter an amount, such as 12.50.', values };
+  }
+  const { categoryId, subcategoryId } = splitTarget(target);
+  const result = await getContainer().registerExpense.execute({
+    expenseId: crypto.randomUUID(),
+    userEmail,
+    amountCents,
+    spentOn,
+    categoryId,
+    subcategoryId,
+  });
+  if (!result.ok) return { status: 'error', message: registerExpenseMessage(result.error), values };
+  revalidatePath(PATH);
+  return { status: 'success', message: 'Expense registered.' };
+}
+
+export async function editExpenseAction(_previous: FormState, formData: FormData): Promise<FormState> {
+  const expenseId = text(formData, 'expenseId');
+  const userEmail = text(formData, 'userEmail');
+  const amount = text(formData, 'amount');
+  const spentOn = text(formData, 'spentOn');
+  const target = text(formData, 'target');
+  const values = { amount, spentOn, target };
+  const amountCents = parseAmountToCents(amount);
+  if (amountCents === null) {
+    return { status: 'error', message: 'Enter an amount, such as 12.50.', values };
+  }
+  const { categoryId, subcategoryId } = splitTarget(target);
+  const result = await getContainer().editExpense.execute({
+    expenseId,
+    userEmail,
+    amountCents,
+    spentOn,
+    categoryId,
+    subcategoryId,
+  });
+  if (!result.ok) return { status: 'error', message: editExpenseMessage(result.error), values };
+  revalidatePath(PATH);
+  return { status: 'success', message: 'Expense updated.' };
+}
+
+export async function deleteExpenseAction(_previous: FormState, formData: FormData): Promise<FormState> {
+  const result = await getContainer().deleteExpense.execute({
+    expenseId: text(formData, 'expenseId'),
+    userEmail: text(formData, 'userEmail'),
+  });
+  if (!result.ok) return { status: 'error', message: deleteExpenseMessage(result.error) };
+  revalidatePath(PATH);
+  return { status: 'success', message: 'Expense deleted.' };
+}
+
+/** "12.50" is 1250 cents. Null when the text is not a number at all. */
+function parseAmountToCents(raw: string): number | null {
+  const value = Number(raw);
+  return Number.isFinite(value) ? Math.round(value * 100) : null;
+}
+
+/** A select value is "categoryId" or "categoryId:subcategoryId". */
+function splitTarget(target: string): { categoryId: string; subcategoryId?: string } {
+  const separator = target.indexOf(':');
+  if (separator === -1) return { categoryId: target };
+  return { categoryId: target.slice(0, separator), subcategoryId: target.slice(separator + 1) };
 }
