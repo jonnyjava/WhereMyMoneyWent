@@ -1,8 +1,9 @@
 import type { ExpenseCategoryDto } from '@/contexts/expenses';
 import { DeleteCategoryForm } from './delete-category-form.client';
 import { RenameCategoryForm } from './rename-category-form.client';
+import { SubcategoryList } from './subcategory-list';
 
-/** The user's expense-categories. A server component: it renders what the query returned. */
+/** The user's expense-categories, each with its expense-subcategories. A server component. */
 export function CategoryList({
   categories,
   userEmail,
@@ -21,6 +22,7 @@ export function CategoryList({
           <div className="mt-3 flex flex-col gap-4">
             <RenameCategoryForm categoryId={category.id} name={category.name} userEmail={userEmail} />
             <DeleteCategoryForm categoryId={category.id} name={category.name} userEmail={userEmail} />
+            <SubcategoryList category={category} userEmail={userEmail} />
           </div>
         </li>
       ))}

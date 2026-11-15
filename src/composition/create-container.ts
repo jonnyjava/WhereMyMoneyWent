@@ -1,9 +1,13 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { CreateExpenseCategoryHandler } from '@/contexts/expenses/application/commands/create-expense-category/create-expense-category.handler';
+import { CreateExpenseSubcategoryHandler } from '@/contexts/expenses/application/commands/create-expense-subcategory/create-expense-subcategory.handler';
 import { DeleteExpenseCategoryHandler } from '@/contexts/expenses/application/commands/delete-expense-category/delete-expense-category.handler';
+import { DeleteExpenseSubcategoryHandler } from '@/contexts/expenses/application/commands/delete-expense-subcategory/delete-expense-subcategory.handler';
 import { RenameExpenseCategoryHandler } from '@/contexts/expenses/application/commands/rename-expense-category/rename-expense-category.handler';
+import { RenameExpenseSubcategoryHandler } from '@/contexts/expenses/application/commands/rename-expense-subcategory/rename-expense-subcategory.handler';
 import { ListExpenseCategoriesHandler } from '@/contexts/expenses/application/queries/list-expense-categories/list-expense-categories.handler';
+import { ListExpenseSubcategoriesHandler } from '@/contexts/expenses/application/queries/list-expense-subcategories/list-expense-subcategories.handler';
 import { DrizzleExpenseCategoryRepository } from '@/contexts/expenses/infrastructure/drizzle-expense-category.repository';
 import type { LoanReturned } from '@/contexts/reference-lending';
 import { ExtendLoanHandler } from '@/contexts/reference-lending/application/commands/extend-loan/extend-loan.handler';
@@ -28,7 +32,11 @@ export type Container = {
   createExpenseCategory: CreateExpenseCategoryHandler;
   renameExpenseCategory: RenameExpenseCategoryHandler;
   deleteExpenseCategory: DeleteExpenseCategoryHandler;
+  createExpenseSubcategory: CreateExpenseSubcategoryHandler;
+  renameExpenseSubcategory: RenameExpenseSubcategoryHandler;
+  deleteExpenseSubcategory: DeleteExpenseSubcategoryHandler;
   listExpenseCategories: ListExpenseCategoriesHandler;
+  listExpenseSubcategories: ListExpenseSubcategoriesHandler;
   close(): Promise<void>;
 };
 
@@ -60,7 +68,11 @@ export function createContainer(options: ContainerOptions): Container {
     createExpenseCategory: new CreateExpenseCategoryHandler(expenseCategories, clock),
     renameExpenseCategory: new RenameExpenseCategoryHandler(expenseCategories),
     deleteExpenseCategory: new DeleteExpenseCategoryHandler(expenseCategories),
+    createExpenseSubcategory: new CreateExpenseSubcategoryHandler(expenseCategories),
+    renameExpenseSubcategory: new RenameExpenseSubcategoryHandler(expenseCategories),
+    deleteExpenseSubcategory: new DeleteExpenseSubcategoryHandler(expenseCategories),
     listExpenseCategories: new ListExpenseCategoriesHandler(expenseCategories),
+    listExpenseSubcategories: new ListExpenseSubcategoriesHandler(expenseCategories),
     close: () => sql.end(),
   };
 }

@@ -1,5 +1,6 @@
 import { err, ok, type Result } from '@/shared/result';
 import type { ExpenseCategoryDto } from '../application/dto/expense-category.dto';
+import type { ExpenseSubcategoryDto } from '../application/dto/expense-subcategory.dto';
 import type { ExpenseCategoryReadPort } from '../application/ports/expense-category-read.port';
 import { ExpenseCategory, type ExpenseCategoryProps } from '../domain/expense-category.aggregate';
 import type { ExpenseCategoryNameAlreadyExists } from '../domain/expense-category.error';
@@ -25,7 +26,10 @@ export class InMemoryExpenseCategoryRepository implements ExpenseCategoryReposit
         return err(expenseCategoryNameAlreadyExists(snapshot.name.value));
       }
     }
-    this.stored.set(snapshot.id, { ...snapshot });
+    this.stored.set(snapshot.id, {
+      ...snapshot,
+      subcategories: [...snapshot.subcategories],
+    });
     return ok(undefined);
   }
 
@@ -41,5 +45,13 @@ export class InMemoryExpenseCategoryRepository implements ExpenseCategoryReposit
       .filter((props) => props.ownerEmail.equals(ownerEmail))
       .sort((one, other) => one.createdAt.getTime() - other.createdAt.getTime())
       .map((props) => ({ id: props.id, name: props.name.value }));
+  }
+
+  async listSubcategories(categoryId: string, ownerEmail: Email): Promise<ExpenseSubcategoryDto[] | null> {
+    const props = this.stored.get(categoryId);
+    if (!props || !props.ownerEmail.equals(ownerEmail)) return null;
+    return [...props.subcategories]
+      .sort((one, other) => one.name.value.localeCompare(other.name.value))
+      .map((subcategory) => ({ id: subcategory.id, name: subcategory.name.value }));
   }
 }

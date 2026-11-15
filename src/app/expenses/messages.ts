@@ -1,7 +1,11 @@
 import type {
   CreateExpenseCategoryError,
+  CreateExpenseSubcategoryError,
   DeleteExpenseCategoryError,
+  DeleteExpenseSubcategoryError,
+  ListExpenseSubcategoriesError,
   RenameExpenseCategoryError,
+  RenameExpenseSubcategoryError,
 } from '@/contexts/expenses';
 import { assertNever } from '@/shared/assert-never';
 
@@ -52,6 +56,68 @@ export function invalidEmailMessage(): string {
   return 'That email address does not look right. Check it and try again.';
 }
 
+export function createSubcategoryMessage(error: CreateExpenseSubcategoryError): string {
+  switch (error.kind) {
+    case 'InvalidEmail':
+      return invalidEmailMessage();
+    case 'ExpenseCategoryNotFound':
+      return expenseCategoryNotFoundMessage();
+    case 'ExpenseCategoryNameAlreadyExists':
+      return expenseCategorySaveFailedMessage();
+    case 'InvalidSubcategoryName':
+      return invalidSubcategoryNameMessage();
+    case 'SubcategoryNameAlreadyExists':
+      return subcategoryNameAlreadyExistsMessage();
+    default:
+      return assertNever(error);
+  }
+}
+
+export function renameSubcategoryMessage(error: RenameExpenseSubcategoryError): string {
+  switch (error.kind) {
+    case 'InvalidEmail':
+      return invalidEmailMessage();
+    case 'ExpenseCategoryNotFound':
+      return expenseCategoryNotFoundMessage();
+    case 'ExpenseCategoryNameAlreadyExists':
+      return expenseCategorySaveFailedMessage();
+    case 'ExpenseSubcategoryNotFound':
+      return expenseSubcategoryNotFoundMessage();
+    case 'InvalidSubcategoryName':
+      return invalidSubcategoryNameMessage();
+    case 'SubcategoryNameAlreadyExists':
+      return subcategoryNameAlreadyExistsMessage();
+    default:
+      return assertNever(error);
+  }
+}
+
+export function deleteSubcategoryMessage(error: DeleteExpenseSubcategoryError): string {
+  switch (error.kind) {
+    case 'InvalidEmail':
+      return invalidEmailMessage();
+    case 'ExpenseCategoryNotFound':
+      return expenseCategoryNotFoundMessage();
+    case 'ExpenseCategoryNameAlreadyExists':
+      return expenseCategorySaveFailedMessage();
+    case 'ExpenseSubcategoryNotFound':
+      return expenseSubcategoryNotFoundMessage();
+    default:
+      return assertNever(error);
+  }
+}
+
+export function listSubcategoriesMessage(error: ListExpenseSubcategoriesError): string {
+  switch (error.kind) {
+    case 'InvalidEmail':
+      return invalidEmailMessage();
+    case 'ExpenseCategoryNotFound':
+      return expenseCategoryNotFoundMessage();
+    default:
+      return assertNever(error);
+  }
+}
+
 export function invalidCategoryNameMessage(): string {
   return 'Enter a name for the category, using 80 characters at most.';
 }
@@ -62,4 +128,20 @@ export function categoryNameAlreadyExistsMessage(): string {
 
 export function expenseCategoryNotFoundMessage(): string {
   return 'That category no longer exists. Refresh the page to see your categories.';
+}
+
+export function expenseCategorySaveFailedMessage(): string {
+  return 'That category could not be saved because another category already uses its name. Refresh the page and try again.';
+}
+
+export function invalidSubcategoryNameMessage(): string {
+  return 'Enter a name for the subcategory, using 80 characters at most.';
+}
+
+export function subcategoryNameAlreadyExistsMessage(): string {
+  return 'This category already has a subcategory with that name. Choose another name.';
+}
+
+export function expenseSubcategoryNotFoundMessage(): string {
+  return 'That subcategory no longer exists. Refresh the page to see your subcategories.';
 }

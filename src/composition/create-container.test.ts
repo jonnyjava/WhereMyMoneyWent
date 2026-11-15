@@ -16,7 +16,7 @@ describe('composition root (both contexts, real Postgres, real event bus)', () =
   });
   beforeEach(async () => {
     await admin`TRUNCATE reference.loans, reference.return_counters`;
-    await admin`TRUNCATE expenses.expense_categories`;
+    await admin`TRUNCATE expenses.expense_subcategories, expenses.expense_categories`;
   });
   afterAll(async () => {
     await container.close();
@@ -50,5 +50,27 @@ describe('composition root (both contexts, real Postgres, real event bus)', () =
 
     const listed = await container.listExpenseCategories.execute({ userEmail: 'ada@example.com' });
     expect(listed.ok && listed.value).toEqual([{ id: 'category-1', name: 'Food' }]);
+  });
+
+  it('creates and lists expense-subcategories through the wiring', async () => {
+    await container.createExpenseCategory.execute({
+      categoryId: 'category-1',
+      userEmail: 'ada@example.com',
+      name: 'Food',
+    });
+
+    const created = await container.createExpenseSubcategory.execute({
+      categoryId: 'category-1',
+      subcategoryId: 'subcategory-1',
+      userEmail: 'ada@example.com',
+      name: 'Groceries',
+    });
+    expect(created.ok && created.value).toEqual({ id: 'subcategory-1', name: 'Groceries' });
+
+    const listed = await container.listExpenseSubcategories.execute({
+      categoryId: 'category-1',
+      userEmail: 'ada@example.com',
+    });
+    expect(listed.ok && listed.value).toEqual([{ id: 'subcategory-1', name: 'Groceries' }]);
   });
 });
