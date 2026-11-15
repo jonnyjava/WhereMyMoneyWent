@@ -31,3 +31,5 @@ pnpm prove:guardrails           # proves every guardrail actually bites
 | `scripts/` | `checks/` (the guardrails), `db/`, `plan/` (planning tools), `proofs/` (map: `scripts/README.md`) |
 | `.github/` | workflows, the setup action, the issue template, CODEOWNERS |
 | `e2e/`, `drizzle/` | Playwright tests; database migrations |
+
+## test
