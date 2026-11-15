@@ -1,0 +1,406 @@
+name: Pipeline
+
+# Pre-merge gates for agent PRs (branches starting with `agent/`):
+#   style (CI) -> architecture review (agent) -> QA gate (agent) -> e2e (CI) -> gate
+# The final `gate` job is the required status check. It arms auto-merge when
+# everything is green, and otherwise starts a fix round or escalates.
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, synchronize, reopened]
+
+concurrency:
+  group: pipeline-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  DATABASE_URL: postgres://postgres:postgres@localhost:5432/app_test
+
+jobs:
+  # ---------------------------------------------------------------------------
+  guard:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run: ${{ steps.g.outputs.run }}
+      is_agent: ${{ steps.g.outputs.is_agent }}
+      reason: ${{ steps.g.outputs.reason }}
+      needs_approval: ${{ steps.g.outputs.needs_approval }}
+    steps:
+      # Trusted copy: the protected-paths list and script come from the BASE
+      # branch, so a PR cannot edit the checklist that judges it.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+      # The PR's package.json is only READ (compared), never executed.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: head
+      - id: g
+        # Untrusted values (branch name, labels) go through env, never inline.
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          DRAFT: ${{ github.event.pull_request.draft }}
+          SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+          KILL: ${{ vars.AGENTS_ENABLED }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          run=true; is_agent=false; reason=""
+          case "$HEAD_REF" in agent/*) is_agent=true ;; esac
+          # Fail closed: if this call fails, the step (and the gate) fails.
+          files="$(gh pr diff "$PR" --name-only)"
+          # Files that match harness/protected-paths.txt (the single list).
+          hits="$(printf '%s\n' "$files" | bash base/harness/bin/protected-paths.sh match base/harness/protected-paths.txt)"
+          # package.json "scripts" define what the checks do. Changing them
+          # needs a human. A missing or unreadable file counts as empty.
+          scripts_of() { jq -S '.scripts // {}' "$1" 2>/dev/null || echo '{}'; }
+          scripts_changed=false
+          if [ "$(scripts_of base/package.json)" != "$(scripts_of head/package.json)" ]; then
+            scripts_changed=true
+          fi
+          # Dependency changes (the lockfile) may be made by an agent, but only a person may approve them.
+          # Fail closed: a missing, empty or unreadable list means approval is required.
+          needs_approval=false
+          if approval_hits="$(printf '%s\n' "$files" | bash base/harness/bin/protected-paths.sh match base/harness/human-approval-paths.txt 2>/dev/null)"; then
+            if [ -n "$approval_hits" ]; then needs_approval=true; fi
+          else
+            needs_approval=true
+          fi
+          if   [ "$is_agent" != true ]; then run=false; reason="not an agent branch"
+          elif [ "$SAME_REPO" != true ]; then run=false; reason="fork PRs are not allowed"
+          elif [ "$KILL" = false ];      then run=false; reason="kill switch is on (AGENTS_ENABLED=false)"
+          elif [ "$DRAFT" = true ];      then run=false; reason="draft"
+          elif [[ ",$LABELS," == *",needs-human,"* ]]; then run=false; reason="labeled needs-human"
+          elif [ -n "$hits" ]; then
+            run=false; reason="touches protected paths; a human must review and merge it"
+          elif [ "$scripts_changed" = true ]; then
+            run=false; reason="changes package.json scripts; a human must review and merge it"
+          fi
+          {
+            echo "run=$run"
+            echo "is_agent=$is_agent"
+            echo "reason=$reason"
+            echo "needs_approval=$needs_approval"
+          } >> "$GITHUB_OUTPUT"
+          echo "run=$run is_agent=$is_agent needs_approval=$needs_approval reason=$reason"
+
+  # ---------------------------------------------------------------------------
+  style:
+    needs: guard
+    if: needs.guard.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: app_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0 # check:migrations diffs against the base branch
+      - uses: ./.github/actions/setup
+      - name: verify:fast and migration check
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          pnpm verify:fast 2>&1 | tee findings-style.md
+          # Prints a line starting with "NEEDS_HUMAN:" for destructive migrations.
+          pnpm check:migrations 2>&1 | tee -a findings-style.md
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: findings-style
+          path: findings-style.md
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  arch:
+    needs: [guard, style]
+    if: needs.guard.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+    outputs:
+      verdict: ${{ steps.v.outputs.verdict }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR: ${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: ./.github/actions/setup
+      - name: Build context
+        env:
+          BASE: ${{ github.event.pull_request.base.ref }}
+        run: bash harness/bin/build-context.sh "$PR" "$BASE" > context.md
+      - name: Run architecture reviewer
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: bash harness/bin/run-agent.sh architecture-reviewer context.md | tee findings-arch.md
+      - name: Parse verdict
+        id: v
+        if: always()
+        run: echo "verdict=$(bash harness/bin/parse-verdict.sh findings-arch.md)" >> "$GITHUB_OUTPUT"
+      - name: Post review
+        if: always()
+        run: '[ -s findings-arch.md ] && gh pr comment "$PR" --body-file findings-arch.md || true'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: findings-arch
+          path: findings-arch.md
+          if-no-files-found: ignore
+      - name: Enforce verdict
+        env:
+          V: ${{ steps.v.outputs.verdict }}
+        run: '[ "$V" = APPROVE ] || { echo "::error::Architecture review verdict: $V"; exit 1; }'
+
+  # ---------------------------------------------------------------------------
+  qa:
+    needs: [guard, arch]
+    if: needs.guard.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+    outputs:
+      verdict: ${{ steps.v.outputs.verdict }}
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: app_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR: ${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: ./.github/actions/setup
+      - name: Build context
+        env:
+          BASE: ${{ github.event.pull_request.base.ref }}
+        run: bash harness/bin/build-context.sh "$PR" "$BASE" > context.md
+      - name: Run QA gate
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: bash harness/bin/run-agent.sh qa-gate context.md | tee findings-qa.md
+      - name: Parse verdict
+        id: v
+        if: always()
+        run: echo "verdict=$(bash harness/bin/parse-verdict.sh findings-qa.md)" >> "$GITHUB_OUTPUT"
+      - name: Post review
+        if: always()
+        run: '[ -s findings-qa.md ] && gh pr comment "$PR" --body-file findings-qa.md || true'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: findings-qa
+          path: findings-qa.md
+          if-no-files-found: ignore
+      - name: Enforce verdict
+        env:
+          V: ${{ steps.v.outputs.verdict }}
+        run: '[ "$V" = APPROVE ] || { echo "::error::QA verdict: $V"; exit 1; }'
+
+  # ---------------------------------------------------------------------------
+  e2e:
+    needs: [guard, qa]
+    if: needs.guard.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: app_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: ./.github/actions/setup
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Run e2e
+        run: pnpm test:e2e 2>&1 | tee findings-e2e.md
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: findings-e2e
+          path: findings-e2e.md
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # Required status check. Decides: skip, merge, fix round, or escalate.
+  gate:
+    needs: [guard, style, arch, qa, e2e]
+    # Not always(): when a newer push cancels this run, the gate must not run,
+    # or it would read the cancelled jobs as failures and start a bogus fix round.
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR: ${{ github.event.pull_request.number }}
+    steps:
+      - name: Decide
+        id: d
+        env:
+          R_GUARD: ${{ needs.guard.result }}
+          IS_AGENT: ${{ needs.guard.outputs.is_agent }}
+          RUN: ${{ needs.guard.outputs.run }}
+          REASON: ${{ needs.guard.outputs.reason }}
+          R_STYLE: ${{ needs.style.result }}
+          R_ARCH: ${{ needs.arch.result }}
+          R_QA: ${{ needs.qa.result }}
+          R_E2E: ${{ needs.e2e.result }}
+          NEEDS_APPROVAL: ${{ needs.guard.outputs.needs_approval }}
+        run: |
+          if [ "$R_GUARD" != success ]; then
+            state=blocked; REASON="the guard job did not succeed"
+          elif [ "$IS_AGENT" != true ]; then
+            state=skip
+          elif [ "$RUN" != true ]; then
+            if [ "$REASON" = draft ]; then state=skip; else state=blocked; fi
+          elif [ "$R_STYLE-$R_ARCH-$R_QA-$R_E2E" = success-success-success-success ]; then
+            # Fail closed: only an explicit "false" lets the pipeline merge by itself.
+            if [ "$NEEDS_APPROVAL" = false ]; then state=green; else state=approval; fi
+          else
+            state=red
+          fi
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+          echo "Pipeline state: $state ${REASON:+($REASON)}"
+          if [ "$state" = blocked ]; then echo "::error::Blocked: $REASON"; fi
+
+      # --- green: arm auto-merge (as the App, so the merge triggers deploy.yml)
+      - name: Create App token
+        if: steps.d.outputs.state == 'green'
+        id: app
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      - name: Arm auto-merge
+        if: steps.d.outputs.state == 'green'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        run: |
+          paused="$(gh issue list --label regression --label needs-human --state open --json number --jq length)"
+          if [ "$paused" -gt 0 ]; then
+            echo "::error::Pipeline paused: an unresolved regression needs a human."
+            exit 1
+          fi
+          gh pr merge "$PR" --auto --squash
+
+      # --- red: fix round or escalation
+      - name: Collect findings
+        if: steps.d.outputs.state == 'red'
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: findings-*
+          merge-multiple: true
+          path: findings
+      - name: Route (fix round or escalate)
+        if: steps.d.outputs.state == 'red'
+        env:
+          RUN_ID: ${{ github.run_id }}
+          V_ARCH: ${{ needs.arch.outputs.verdict }}
+          V_QA: ${{ needs.qa.outputs.verdict }}
+        run: |
+          escalate() {
+            gh label create needs-human --color D93F0B 2>/dev/null || true
+            gh pr edit "$PR" --add-label needs-human
+            gh pr comment "$PR" --body "Escalating to a human: $1 See the run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$RUN_ID"
+          }
+
+          ROUND="$(gh pr view "$PR" --json labels --jq \
+            '[.labels[].name | select(test("^round-[0-9]+$")) | ltrimstr("round-") | tonumber] | (max // 0)')"
+
+          needs_human=false
+          [ "$V_ARCH" = NEEDS_HUMAN ] && needs_human=true
+          [ "$V_QA" = NEEDS_HUMAN ] && needs_human=true
+          grep -qs '^NEEDS_HUMAN:' findings/findings-style.md && needs_human=true
+
+          if [ "$needs_human" = true ]; then
+            escalate "a gate returned NEEDS_HUMAN (or a destructive migration was detected)."
+          elif [ "$ROUND" -ge 3 ]; then
+            escalate "3 fix rounds were not enough."
+          else
+            NEXT=$((ROUND + 1))
+            gh label create "round-$NEXT" --color BFD4F2 --description "Fix round $NEXT" 2>/dev/null || true
+            gh pr edit "$PR" --add-label "round-$NEXT"
+            if [ "$ROUND" -gt 0 ]; then gh pr edit "$PR" --remove-label "round-$ROUND" || true; fi
+            gh workflow run coding-agent.yml -f mode=fix -f pr="$PR" -f run_id="$RUN_ID"
+            echo "Started fix round $NEXT"
+          fi
+
+      # --- approval: every check passed, but a person must approve and merge (a dependency change)
+      - name: Ask a person to approve
+        if: steps.d.outputs.state == 'approval'
+        run: |
+          gh label create awaiting-approval --color FBCA04 --description "All checks passed; a person must approve and merge" 2>/dev/null || true
+          labels="$(gh pr view "$PR" --json labels --jq '[.labels[].name] | join(",")')"
+          if [[ ",$labels," != *",awaiting-approval,"* ]]; then
+            gh pr edit "$PR" --add-label awaiting-approval
+            gh pr comment "$PR" --body "All checks passed. This change touches the lockfile, so a person must review the dependency changes and merge it: auto-merge is not armed."
+          fi
+          echo "Waiting for a person to approve."
+
+      - name: Fail unless green or skipped
+        if: steps.d.outputs.state == 'red' || steps.d.outputs.state == 'blocked'
+        run: exit 1

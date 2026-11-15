@@ -1,0 +1,87 @@
+name: Digest
+
+# Daily: a summary of what shipped and what is stuck (your paper trail).
+# Mondays: the reviewers' "PROPOSED RULES" from the last week, collected into
+# one issue so you can improve AGENTS.md from real PRs.
+# Deterministic: no agent runs here.
+
+on:
+  schedule:
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  actions: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Daily summary
+        run: |
+          since="$(date -u -d '1 day ago' +%Y-%m-%d)"
+          {
+            echo "## Digest $(date -u +%Y-%m-%d)"
+            echo
+            echo "### Merged since $since"
+            gh pr list --state merged --search "merged:>=$since" --json number,title \
+              --jq '.[] | "- #\(.number) \(.title)"'
+            echo
+            echo "### Waiting for a human (needs-human)"
+            gh issue list --label needs-human --state open --json number,title \
+              --jq '.[] | "- #\(.number) \(.title)"'
+            gh pr list --label needs-human --state open --json number,title \
+              --jq '.[] | "- PR #\(.number) \(.title)"'
+            echo
+            echo "### Open regressions"
+            gh issue list --label regression --state open --json number,title \
+              --jq '.[] | "- #\(.number) \(.title)"'
+            echo
+            echo "### Latest deploys"
+            gh run list --workflow deploy.yml --limit 3 --json conclusion,createdAt,displayTitle \
+              --jq '.[] | "- \(.createdAt) \(.conclusion // "running"): \(.displayTitle)"'
+          } > digest.md
+
+          gh label create digest-log --color 5319E7 2>/dev/null || true
+          log="$(gh issue list --label digest-log --state open --json number --jq '.[0].number // empty')"
+          if [ -z "$log" ]; then
+            url="$(gh issue create --title "Pipeline log" --label digest-log --body "Daily digests are posted here.")"
+            log="${url##*/}"
+          fi
+          gh issue comment "$log" --body-file digest.md
+
+      - name: Weekly harness feedback (Mondays)
+        run: |
+          # Only on Mondays (date +%u == 1), or when run manually.
+          if [ "${{ github.event_name }}" = schedule ] && [ "$(date -u +%u)" != 1 ]; then exit 0; fi
+
+          since="$(date -u -d '7 days ago' +%Y-%m-%d)"
+          : > proposals.md
+          for n in $(gh pr list --state merged --search "merged:>=$since" --json number --jq '.[].number'); do
+            found="$(gh pr view "$n" --json comments --jq '.comments[].body' \
+              | awk '/PROPOSED RULES/ {p=1; next} p && /^[[:space:]]*$/ {p=0} p {print}')"
+            if [ -n "$found" ]; then
+              { echo "#### From PR #$n"; echo "$found"; echo; } >> proposals.md
+            fi
+          done
+          [ -s proposals.md ] || exit 0
+
+          gh label create harness-feedback --color 0E8A16 2>/dev/null || true
+          fb="$(gh issue list --label harness-feedback --state open --json number --jq '.[0].number // empty')"
+          if [ -z "$fb" ]; then
+            url="$(gh issue create --title "Harness feedback" --label harness-feedback --body "Proposed rules from reviewers. Accept, reject, or turn into an AGENTS.md change.")"
+            fb="${url##*/}"
+          fi
+          { echo "### Week ending $(date -u +%Y-%m-%d)"; echo; cat proposals.md; } > feedback.md
+          gh issue comment "$fb" --body-file feedback.md

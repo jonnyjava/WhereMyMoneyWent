@@ -1,0 +1,153 @@
+name: Deploy
+
+# Deterministic. No agent runs here and no agent can read these secrets: they
+# live in the `production` environment, which must be restricted to `main`.
+#
+# Flow: migrate -> build -> staged deploy (not promoted) -> post-deploy tests
+#       on the deployment's own URL -> promote -> verify production.
+# Failure before promotion: users keep the last good version.
+# Failure after promotion: roll back.
+# Either way: open a `regression` issue and hand it to the coding agent
+# (once; a second failure for the same regression escalates to a human).
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: write
+  actions: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: ./.github/actions/setup
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      # Migrations are backward compatible by rule (see AGENTS.md), so the
+      # version still in production keeps working against the new schema.
+      - name: Apply migrations
+        id: migrate
+        run: pnpm db:migrate
+
+      - name: Pull Vercel settings
+        run: pnpm exec vercel pull --yes --environment=production --token "$VERCEL_TOKEN"
+
+      - name: Build
+        run: pnpm exec vercel build --prod --token "$VERCEL_TOKEN"
+
+      # --skip-domain: create the production deployment WITHOUT assigning the
+      # production domain. Needs `vercel` as a devDependency (pinned by the lockfile).
+      - name: Deploy (staged, not promoted)
+        id: stage
+        run: |
+          url="$(pnpm exec vercel deploy --prebuilt --prod --skip-domain --token "$VERCEL_TOKEN")"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Staged deployment: $url"
+
+      # Vercel deployment protection may block the test runner. Check the
+      # current "Protection Bypass for Automation" docs and adapt the tests to
+      # send the bypass secret.
+      - name: Post-deploy tests (staged deployment)
+        env:
+          BASE_URL: ${{ steps.stage.outputs.url }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: pnpm test:postdeploy
+
+      - name: Promote to production
+        id: promote
+        env:
+          STAGED_URL: ${{ steps.stage.outputs.url }}
+        run: pnpm exec vercel promote "$STAGED_URL" --yes --token "$VERCEL_TOKEN"
+
+      - name: Verify production
+        id: verify
+        env:
+          BASE_URL: ${{ vars.PRODUCTION_URL }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: pnpm test:postdeploy
+
+      # Only reached if verification failed AFTER promotion.
+      - name: Roll back production
+        if: failure() && steps.promote.outcome == 'success'
+        run: pnpm exec vercel rollback --yes --token "$VERCEL_TOKEN"
+
+      - name: Handle regression
+        if: failure()
+        env:
+          SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          STAGED_URL: ${{ steps.stage.outputs.url }}
+        run: |
+          PR_NUM="$(gh api "repos/$GH_REPO/commits/$SHA/pulls" --jq '.[0].number // empty' || true)"
+
+          # Is the commit that just failed itself the fix for an earlier regression?
+          PREV=""
+          if [ -n "$PR_NUM" ]; then
+            PREV="$(gh pr view "$PR_NUM" --json closingIssuesReferences --jq '.closingIssuesReferences[0].number // empty' || true)"
+          fi
+          if [ -n "$PREV" ] && gh issue view "$PREV" --json labels --jq '.labels[].name' | grep -qx regression; then
+            gh label create needs-human --color D93F0B 2>/dev/null || true
+            gh issue edit "$PREV" --add-label needs-human
+            # The merged fix PR closed the issue ("Closes #N"). Reopen it: the
+            # pipeline pause only looks at OPEN regression + needs-human issues.
+            gh issue reopen "$PREV" || true
+            gh issue comment "$PREV" --body "The fix for this regression also failed deployment. Escalating to a human. The pipeline is paused until the needs-human label is cleared. Run: $RUN_URL"
+            exit 0
+          fi
+
+          gh label create regression --color B60205 2>/dev/null || true
+          gh label create regression-attempt-1 --color E99695 2>/dev/null || true
+          # Written to the same standard as a task issue (see
+          # .github/ISSUE_TEMPLATE/task.md), so the coding agent's intake check
+          # and the QA gate work on it unchanged.
+          cat > body.md <<EOF
+          ## Goal
+          Fix the deployment failure after merging ${PR_NUM:+PR #$PR_NUM (}commit ${SHA:0:7}${PR_NUM:+)}, so that the change can be deployed.
+
+          ## Bounded context
+          Not known in advance. Identify it from the failing change and the logs. If the cause lies outside the existing contexts or needs a new one, stop and ask.
+
+          ## Acceptance criteria
+          - [ ] A test reproduces the failure shown in the logs and fails without the fix.
+          - [ ] That test passes with the fix, and \`pnpm verify\` passes.
+
+          ## Out of scope
+          Unrelated refactors, and any change to protected paths.
+
+          ## Open questions
+          None.
+
+          ## Context
+          - Workflow run: $RUN_URL (read the logs with \`gh run view $RUN_ID --log-failed\`)
+          - Staged deployment: ${STAGED_URL:-none}
+          EOF
+          ISSUE_URL="$(gh issue create \
+            --title "Regression: deploy failed for ${SHA:0:7}" \
+            --body-file body.md \
+            --label regression --label regression-attempt-1)"
+          ISSUE_NUM="${ISSUE_URL##*/}"
+          gh workflow run coding-agent.yml -f mode=implement -f issue="$ISSUE_NUM"
