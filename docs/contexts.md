@@ -6,4 +6,4 @@ public `index.ts`, and which other contexts it talks to (events or public API).
 
 | Context | Purpose | Owns | Talks to |
 |---|---|---|---|
-| _none yet_ | | | |
+| `expenses` | Expense categories and subcategories a user owns, and the expenses recorded under them. | | |
